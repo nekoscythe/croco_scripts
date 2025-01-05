@@ -1,0 +1,35 @@
+#!/bin/bash
+
+# Read dependencies from metadata.yaml
+DEPENDENCIES=$(yq eval '.dependencies' "metadata.yaml" -o=json | yq eval -r '.[]')
+# Read parent dependencies from ../../metadata.yaml
+PARENT_DEPENDENCIES=$(yq eval '.dependencies' "../../metadata.yaml" -o=json | yq eval -r '.[]')
+
+# Convert parent dependencies into an array
+IFS=$'\n' read -rd '' -a PARENT_DEPENDENCIES_ARRAY <<< "$PARENT_DEPENDENCIES"
+
+# Loop through dependencies and check against parent dependencies
+for DEPENDENCY in $DEPENDENCIES; do
+    echo "Checking $DEPENDENCY"
+
+    # Use a flag to track if the dependency is found
+    FOUND=false
+    for PARENT_DEPENDENCY in "${PARENT_DEPENDENCIES_ARRAY[@]}"; do
+        if [[ "$PARENT_DEPENDENCY" == "$DEPENDENCY" ]]; then
+            FOUND=true
+            break
+        fi
+    done
+
+    if [[ "$FOUND" == false ]]; then
+        echo "Error: Dependency '$DEPENDENCY' not found in parent test."
+        exit 1
+    fi
+
+    #print difference between dependencies
+    echo "Difference between dependencies"
+    DIFFERENCE=$(diff <(echo "$DEPENDENCIES" | tr ' ' '\n' | sort) <(echo "$PARENT_DEPENDENCIES" | tr ' ' '\n' | sort))
+    echo "$DIFFERENCE"
+
+
+done
