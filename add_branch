@@ -1,124 +1,122 @@
-    #!/bin/bash
+#!/bin/bash
 
-    # Function to get the root directory of the project by looking for settings.yaml
-    get_root_dir() {
-        DIR="$(pwd)"
-        while [[ ! -f "$DIR/settings.yaml" && "$DIR" != "/" ]]; do
-            DIR=$(dirname "$DIR")
-        done
+# Function to get the root directory of the project by looking for settings.yaml
+get_root_dir() {
+    DIR="$(pwd)"
+    while [[ ! -f "$DIR/settings.yaml" && "$DIR" != "/" ]]; do
+        DIR=$(dirname "$DIR")
+    done
 
-        if [[ -f "$DIR/settings.yaml" ]]; then
-            echo "$DIR"
-        else
-            echo "Error: Root directory not found. Ensure settings.yaml exists in the project root."
-            exit 1
-        fi
-    }
+    if [[ -f "$DIR/settings.yaml" ]]; then
+        echo "$DIR"
+    else
+        echo "Error: Root directory not found. Ensure settings.yaml exists in the project root."
+        exit 1
+    fi
+}
 
-    # Function to add a branch (subtest) to the current test folder
-    add_branch() {
-        if [[ -z "$1" ]]; then
-            echo "Error: Missing argument. Please provide the branch test name."
-            exit 1
-        fi
+# Function to add a branch (subtest) to the current test folder
+add_branch() {
+    if [[ -z "$1" ]]; then
+        echo "Error: Missing argument. Please provide the branch test name."
+        exit 1
+    fi
 
-        # Validate branch test name
-        BRANCH_TEST_NAME="$1"
-        if [[ ! "$BRANCH_TEST_NAME" =~ ^[a-zA-Z0-9_-]+$ ]]; then
-            echo "Error: Invalid branch test name. Use only alphanumeric characters, underscores, or hyphens."
-            exit 1
-        fi
+    # Validate branch test name
+    BRANCH_TEST_NAME="$1"
+    if [[ ! "$BRANCH_TEST_NAME" =~ ^[a-zA-Z0-9_-]+$ ]]; then
+        echo "Error: Invalid branch test name. Use only alphanumeric characters, underscores, or hyphens."
+        exit 1
+    fi
 
-        # Verify if we're in a valid test directory
-        if [[ ! -f "metadata.yaml" ]]; then
-            echo "Error: No metadata.yaml file found in the current directory. Run the script from a valid test folder."
-            exit 1
-        fi
+    # Verify if we're in a valid test directory
+    if [[ ! -f "metadata.yaml" ]]; then
+        echo "Error: No metadata.yaml file found in the current directory. Run the script from a valid test folder."
+        exit 1
+    fi
 
-        # Extract the parent test name and ID from the metadata file using yq
-        PARENT_TEST_NAME=$(yq eval '.test_name' metadata.yaml)
-        PARENT_TEST_ID=$(yq eval '.test_id' metadata.yaml)
-        if [[ -z "$PARENT_TEST_NAME" || -z "$PARENT_TEST_ID" ]]; then
-            echo "Error: Could not find valid test_name or test_id in metadata.yaml."
-            exit 1
-        fi
+    # Extract the parent test name and ID from the metadata file using yq
+    PARENT_TEST_NAME=$(yq eval '.test_name' metadata.yaml)
+    PARENT_TEST_ID=$(yq eval '.test_id' metadata.yaml)
+    if [[ -z "$PARENT_TEST_NAME" || -z "$PARENT_TEST_ID" ]]; then
+        echo "Error: Could not find valid test_name or test_id in metadata.yaml."
+        exit 1
+    fi
 
-        # Prompt the user for the subtest's test_id if not provided
-        echo "Parent test ID: $PARENT_TEST_ID"
-        read -p "Enter the test ID for the new branch (subtest) or press Enter to auto-generate: " BRANCH_TEST_ID
+    # Define the branch test path
+    SUBTESTS_DIR="subtests"
+    BRANCH_TEST_PATH="$SUBTESTS_DIR/$BRANCH_TEST_NAME"
 
-        # If the user did not provide a test ID, generate one by appending a suffix
-        if [[ -z "$BRANCH_TEST_ID" ]]; then
-            EXISTING_SUBTESTS_COUNT=$(ls -1 "subtests" 2>/dev/null | wc -l)
-            SUFFIX=$(printf "\\$(printf '%03o' $((97 + EXISTING_SUBTESTS_COUNT))))"  # 97 is ASCII for 'a'
-            BRANCH_TEST_ID="${PARENT_TEST_ID}${SUFFIX}"
-            echo "Generated branch test ID: $BRANCH_TEST_ID"
-        fi
 
-        # Define the branch test path
-        SUBTESTS_DIR="subtests"
-        BRANCH_TEST_PATH="$SUBTESTS_DIR/$BRANCH_TEST_NAME"
+    # Ensure the branch test directory does not already exist
+    if [[ -d "$BRANCH_TEST_PATH" ]]; then
+        echo "Error: Branch test '$BRANCH_TEST_NAME' already exists in the current directory."
+        exit 1
+    fi
 
-        # Ensure the branch test directory does not already exist
-        if [[ -d "$BRANCH_TEST_PATH" ]]; then
-            echo "Error: Branch test '$BRANCH_TEST_NAME' already exists in the current directory."
-            exit 1
-        fi
+    # Count the number of existing subtest folders
+    EXISTING_SUBTESTS_COUNT=$(ls -1 "$SUBTESTS_DIR" 2>/dev/null | wc -l)
 
-        # Confirm the user wants to create the branch test
-        echo "You are about to create a branch test '$BRANCH_TEST_NAME' inside '$PARENT_TEST_NAME'."
-        echo "Full path: $(pwd)/$BRANCH_TEST_PATH"
-        read -p "Proceed? (y/n): " CONFIRM
-        if [[ ! "$CONFIRM" =~ ^[Yy]$ ]]; then
-            echo "Branch test creation aborted."
-            exit 0
-        fi
+    # Confirm the user wants to create the branch test
+    echo "You are about to create a branch test '$BRANCH_TEST_NAME' inside '$PARENT_TEST_NAME'."
+    echo "Full path: $(pwd)/$BRANCH_TEST_PATH"
+    read -p "Proceed? (y/n): " CONFIRM
+    if [[ ! "$CONFIRM" =~ ^[Yy]$ ]]; then
+        echo "Branch test creation aborted."
+        exit 0
+    fi
 
-        # Create the branch test directory
-        if ! mkdir -p "$BRANCH_TEST_PATH"; then
-            echo "Error: Failed to create branch test directory '$BRANCH_TEST_PATH'."
-            exit 1
-        fi
+    # Create the branch test directory
+    if ! mkdir -p "$BRANCH_TEST_PATH"; then
+        echo "Error: Failed to create branch test directory '$BRANCH_TEST_PATH'."
+        exit 1
+    fi
 
-        # Copy contents of the current test folder (excluding the subtests and outputs folders) into the new branch
-        if ! rsync -a --exclude="$SUBTESTS_DIR" --exclude="outputs" . "$BRANCH_TEST_PATH/"; then
-            echo "Error: Failed to copy files to branch test directory '$BRANCH_TEST_PATH'."
-            exit 1
-        fi
+    # Copy contents of the current test folder (excluding the subtests and outputs folders) into the new branch
+    if ! rsync -a --exclude="$SUBTESTS_DIR" --exclude="outputs" . "$BRANCH_TEST_PATH/"; then
+        echo "Error: Failed to copy files to branch test directory '$BRANCH_TEST_PATH'."
+        exit 1
+    fi
 
-        # Create subtests directory inside the branch test
-        if ! mkdir -p "$BRANCH_TEST_PATH/$SUBTESTS_DIR"; then
-            echo "Error: Failed to create subtests directory inside '$BRANCH_TEST_PATH'."
-            exit 1
-        fi
+    # Create subtests directory inside the branch test
+    if ! mkdir -p "$BRANCH_TEST_PATH/$SUBTESTS_DIR"; then
+        echo "Error: Failed to create subtests directory inside '$BRANCH_TEST_PATH'."
+        exit 1
+    fi
 
-        # Create a symbolic link for the outputs directory
-        PARENT_OUTPUTS_DIR="$(pwd)/outputs/$BRANCH_TEST_NAME"
-        if ! mkdir -p "$PARENT_OUTPUTS_DIR"; then
-            echo "Error: Failed to create parent outputs directory '$PARENT_OUTPUTS_DIR'."
-            exit 1
-        fi
-        if ! ln -s "$PARENT_OUTPUTS_DIR" "$BRANCH_TEST_PATH/outputs"; then
-            echo "Error: Failed to create symbolic link for outputs directory."
-            exit 1
-        fi
+    # Create a symbolic link for the outputs directory
+    PARENT_OUTPUTS_DIR="$(pwd)/outputs/$BRANCH_TEST_NAME"
+    if ! mkdir -p "$PARENT_OUTPUTS_DIR"; then
+        echo "Error: Failed to create parent outputs directory '$PARENT_OUTPUTS_DIR'."
+        exit 1
+    fi
+    if ! ln -s "$PARENT_OUTPUTS_DIR" "$BRANCH_TEST_PATH/outputs"; then
+        echo "Error: Failed to create symbolic link for outputs directory."
+        exit 1
+    fi
 
-        # Update metadata for the branch test using yq
-        METADATA_FILE="$BRANCH_TEST_PATH/metadata.yaml"
-        if [[ -f "$METADATA_FILE" ]]; then
-            yq eval ".test_name = \"$BRANCH_TEST_NAME\"" -i "$METADATA_FILE"
-            yq eval ".parent_test = \"$PARENT_TEST_NAME\"" -i "$METADATA_FILE"
-            yq eval ".test_id = \"$BRANCH_TEST_ID\"" -i "$METADATA_FILE"
-        else
-            echo "Error: Failed to update metadata.yaml for branch test '$BRANCH_TEST_NAME'."
-            exit 1
-        fi
+    # Map the count to a letter (0 → a, 1 → b, 2 → c, etc.)
+    SUFFIX=$(printf "\\$(printf '%03o' $((97 + EXISTING_SUBTESTS_COUNT)))")  # 97 is ASCII for 'a'
 
-        echo "Branch test '$BRANCH_TEST_NAME' created with ID '$BRANCH_TEST_ID'."
-        echo "Outputs will be stored in: $PARENT_OUTPUTS_DIR"
-        echo "Branch test ID: $BRANCH_TEST_ID"
-    }
+    # Create the branch test ID by appending the suffix
+    BRANCH_TEST_ID="${PARENT_TEST_ID}${SUFFIX}"
 
-    # Main script execution
-    ROOT_DIR=$(get_root_dir)  # Get the root directory of the project
-    add_branch "$1"  # Add the branch with the provided name
+    # Update metadata for the branch test using yq
+    METADATA_FILE="$BRANCH_TEST_PATH/metadata.yaml"
+    if [[ -f "$METADATA_FILE" ]]; then
+        yq eval ".test_name = \"$BRANCH_TEST_NAME\"" -i "$METADATA_FILE"
+        yq eval ".parent_test = \"$PARENT_TEST_NAME\"" -i "$METADATA_FILE"
+        yq eval ".test_id = \"$BRANCH_TEST_ID\"" -i "$METADATA_FILE"
+    else
+        echo "Error: Failed to update metadata.yaml for branch test '$BRANCH_TEST_NAME'."
+        exit 1
+    fi
+
+    echo "Branch test '$BRANCH_TEST_NAME' created and linked to parent test '$PARENT_TEST_NAME'."
+    echo "Outputs will be stored in: $PARENT_OUTPUTS_DIR"
+    echo "Branch test ID: $BRANCH_TEST_ID"
+}
+
+# Main script execution
+ROOT_DIR=$(get_root_dir)  # Get the root directory of the project
+add_branch "$1"  # Add the branch with the provided name
