@@ -1,0 +1,139 @@
+#!/bin/bash
+
+# Ensure the script is run from the test directory
+TEST_DIR="$(pwd)"
+METADATA_FILE="$TEST_DIR/metadata.yaml"
+LOG_FILE="$TEST_DIR/outputs/run_test.log"
+ARCHIVE_DIR="$TEST_DIR/outputs/archive"  # Directory to store archived files
+
+# Check if metadata.yaml exists
+if [[ ! -f "$METADATA_FILE" ]]; then
+    echo "Error: metadata.yaml not found in $TEST_DIR."
+    exit 1
+fi
+
+# Create the outputs and archive directories if they don't exist
+mkdir -p "$TEST_DIR/outputs"
+mkdir -p "$ARCHIVE_DIR"
+
+# Redirect all output to the log file (overwrite instead of append)
+exec > >(tee "$LOG_FILE") 2>&1
+
+# Read test details from metadata.yaml
+TEST_NAME=$(yq eval '.test_name' "$METADATA_FILE")
+TEST_ID=$(yq eval '.test_id' "$METADATA_FILE")
+TEST_REASON=$(yq eval '.reason' "$METADATA_FILE")
+BINARY_PATH=$(yq eval '.binary_path' "$METADATA_FILE")
+INPUT_FILE="$TEST_DIR/inputs/infile.in"
+
+# Check if the binary exists
+if [[ ! -f "$BINARY_PATH" ]]; then
+    echo "Error: Binary not found at $BINARY_PATH."
+    exit 1
+fi
+
+# Read the companion file to get the stored dependency hashes
+COMPANION_FILE="$BINARY_PATH.hashes"
+if [[ ! -f "$COMPANION_FILE" ]]; then
+    echo "Error: Companion file not found for binary at $COMPANION_FILE."
+    exit 1
+fi
+STORED_DEPENDENCY_HASHES=$(cat "$COMPANION_FILE")
+
+# Read dependency paths and check if their hashes match
+DEPENDENCIES=$(yq eval '.dependencies' "$METADATA_FILE")
+DEPENDENCY_COUNT=$(echo "$DEPENDENCIES" | yq eval 'length' -)
+
+# Confirm test details
+echo "Test Details:"
+echo "-------------"
+echo "Test Name: $TEST_NAME"
+echo "Test ID: $TEST_ID"
+echo "Reason: $TEST_REASON"
+echo "Binary Path: $BINARY_PATH"
+echo "Input File: $INPUT_FILE"
+echo "Log File: $LOG_FILE"
+echo "Archive Directory: $ARCHIVE_DIR"
+echo ""
+
+# Confirm if the user wants to proceed
+read -p "Do you want to run this test? (y/n): " CONFIRM
+if [[ ! "$CONFIRM" =~ ^[Yy]$ ]]; then
+    echo "Test execution aborted."
+    exit 0
+fi
+
+# Ask for the number of cores to use
+AVAILABLE_CORES=$(nproc)  # Get the number of available cores
+echo "Number of available cores: $AVAILABLE_CORES"
+read -p "Enter the number of cores to use (1-$AVAILABLE_CORES): " NUM_CORES
+
+# Validate the number of cores
+if [[ ! "$NUM_CORES" =~ ^[0-9]+$ ]] || (( NUM_CORES < 1 )) || (( NUM_CORES > AVAILABLE_CORES )); then
+    echo "Error: Invalid number of cores. Please enter a number between 1 and $AVAILABLE_CORES."
+    exit 1
+fi
+
+# Set the number of threads for OpenMP (or similar parallel frameworks)
+export OMP_NUM_THREADS="$NUM_CORES"
+echo "Running test with OMP_NUM_THREADS=$OMP_NUM_THREADS..."
+
+# Archive dependencies and input files (overwrite previous archive)
+echo "Archiving dependencies and input files..."
+rm -rf "$ARCHIVE_DIR"  # Clear the previous archive
+mkdir -p "$ARCHIVE_DIR/dependencies"
+mkdir -p "$ARCHIVE_DIR/inputs"
+
+# Copy input file to archive
+if [[ -f "$INPUT_FILE" ]]; then
+    cp "$INPUT_FILE" "$ARCHIVE_DIR/inputs/"
+    echo "Archived input file: $INPUT_FILE"
+else
+    echo "Warning: Input file not found at $INPUT_FILE."
+fi
+
+# Copy dependencies to archive
+for ((i = 0; i < DEPENDENCY_COUNT; i++)); do
+    DEPENDENCY_PATH=$(echo "$DEPENDENCIES" | yq eval ".[$i].path" -)
+    DEPENDENCY_SOURCE="$TEST_DIR/dependencies/$(basename "$DEPENDENCY_PATH")"
+    
+    if [[ -f "$DEPENDENCY_SOURCE" ]]; then
+        cp "$DEPENDENCY_SOURCE" "$ARCHIVE_DIR/dependencies/"
+        echo "Archived dependency: $DEPENDENCY_SOURCE"
+    else
+        echo "Warning: Dependency not found at $DEPENDENCY_SOURCE."
+    fi
+done
+
+# Check dependencies' hashes
+echo "Checking dependency hashes..."
+for ((i = 0; i < DEPENDENCY_COUNT; i++)); do
+    DEPENDENCY_PATH=$(echo "$DEPENDENCIES" | yq eval ".[$i].path" -)
+    DEPENDENCY_SOURCE="$TEST_DIR/dependencies/$(basename "$DEPENDENCY_PATH")"
+    
+    if [[ ! -f "$DEPENDENCY_SOURCE" ]]; then
+        echo "Error: Dependency not found at $DEPENDENCY_SOURCE."
+        exit 1
+    fi
+
+    CURRENT_HASH=$(sha256sum "$DEPENDENCY_SOURCE" | cut -d ' ' -f 1)
+    STORED_HASH=$(echo "$STORED_DEPENDENCY_HASHES" | grep -oP "(?<=^| )$DEPENDENCY_PATH:\K[^ ]+")
+    
+    if [[ "$CURRENT_HASH" != "$STORED_HASH" ]]; then
+        echo "Error: Dependency '$DEPENDENCY_PATH' has changed."
+        echo "Please recompile the binary before running the test."
+        exit 1  # Exit so the user can recompile the binary
+    fi
+done
+
+# Run the test
+echo "Running test $TEST_NAME (ID: $TEST_ID)..."
+"$BINARY_PATH" "$INPUT_FILE"
+
+# Check if the test ran successfully
+if [[ $? -ne 0 ]]; then
+    echo "Error: Test execution failed."
+    exit 1
+fi
+
+echo "Test executed successfully."

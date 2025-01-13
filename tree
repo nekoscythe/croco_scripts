@@ -1,8 +1,8 @@
 #!/bin/bash
 
-# Function to get the root directory of the project by looking for settings.yaml
-get_root_dir() {
-    DIR="$(pwd)"
+# Function to find the root directory by locating settings.yaml
+find_root_dir() {
+    local DIR="$(pwd)"
     while [[ ! -f "$DIR/settings.yaml" && "$DIR" != "/" ]]; do
         DIR=$(dirname "$DIR")
     done
@@ -15,75 +15,117 @@ get_root_dir() {
     fi
 }
 
-# Function to extract the tests_dir value using yq
-get_tests_dir() {
-    ROOT_DIR=$(get_root_dir)
-    TESTS_DIR=$(yq eval '.project.tests_dir' "$ROOT_DIR/settings.yaml" -o=json | yq eval -r '.')
-    echo "$TESTS_DIR"
-}
-
-# Function to list all subtests recursively and display them as a tree with changes
-display_test_tree() {
-    local TEST_DIR="$1"
+# Function to recursively build the test tree
+build_test_tree() {
+    local DIR="$1"
     local PREFIX="$2"
+    local IS_LAST="$3"
 
-    # Print the test name
-    # echo "$TEST_DIR"
-
-    # Check if metadata.yaml exists in the current test directory
-    if [[ -f "$TEST_DIR/metadata.yaml" ]]; then
-        # Extract test name from metadata.yaml
-        local TEST_NAME
-        TEST_NAME=$(yq eval '.test_name' "$TEST_DIR/metadata.yaml" -o=json | yq eval -r '.')
-        echo "${PREFIX}└── ${TEST_NAME}"
-
-        # Display the dependencies (changes) between the tests
-        local DEPENDENCIES
-        DEPENDENCIES=$(yq eval '.dependencies' "$TEST_DIR/metadata.yaml" -o=json | yq eval -r '.[]')
-        for DEPENDENCY in $DEPENDENCIES; do
-            echo "${PREFIX}    ├── $DEPENDENCY"
-   
-
+    # Read metadata.yaml to get test name and test ID
+    local METADATA_FILE="$DIR/metadata.yaml"
+    if [[ -f "$METADATA_FILE" ]]; then
+        local TEST_ID=$(yq eval '.test_id' "$METADATA_FILE")
+        local TEST_NAME=$(yq eval '.description' "$METADATA_FILE")
+    else
+        return
     fi
 
-    # Recursively check for subtests in the subtests directory
-    local SUBTESTS_DIR="$TEST_DIR/subtests"
-    if [[ -d "$SUBTESTS_DIR" ]]; then
-        local SUBTEST_PATHS
-        IFS=$'\n' read -rd '' -a SUBTEST_PATHS <<< "$(find "$SUBTESTS_DIR" -mindepth 1 -maxdepth 1 -type d | sort)"
+    # Display the test name and ID
+    if [[ "$IS_LAST" == "true" ]]; then
+        echo "${PREFIX}└──  (ID: $TEST_ID) $TEST_NAME"
+    else
+        echo "${PREFIX}├──  (ID: $TEST_ID) $TEST_NAME"
+    fi
 
-        for SUBTEST_PATH in "${SUBTEST_PATHS[@]}"; do
-            # Properly handle subtest directories with spaces
-            display_test_tree "$SUBTEST_PATH" "${PREFIX}    "
+    # Find all subtests (child directories)
+    local SUBTESTS_DIR="$DIR/subtests"
+    if [[ -d "$SUBTESTS_DIR" ]]; then
+        local SUBTESTS=("$SUBTESTS_DIR"/*)
+        local SUBTESTS_WITH_METADATA=()
+
+        # Collect all subtests and their metadata
+        for SUBTEST in "${SUBTESTS[@]}"; do
+            if [[ -d "$SUBTEST" ]]; then
+                local SUBTEST_METADATA_FILE="$SUBTEST/metadata.yaml"
+                if [[ -f "$SUBTEST_METADATA_FILE" ]]; then
+                    local SUBTEST_NAME=$(yq eval '.description' "$SUBTEST_METADATA_FILE")
+                    local SUBTEST_ID=$(yq eval '.test_id' "$SUBTEST_METADATA_FILE")
+                    SUBTESTS_WITH_METADATA+=("$SUBTEST|$SUBTEST_NAME|$SUBTEST_ID")
+                fi
+            fi
+        done
+
+        # Sort the subtests by test ID
+        IFS=$'\n' sorted_subtests=($(for subtest in "${SUBTESTS_WITH_METADATA[@]}"; do echo "$subtest"; done | sort -t '|' -k3))
+        unset IFS
+
+        # Iterate over sorted subtests and display them
+        local COUNT=${#sorted_subtests[@]}
+        local INDEX=0
+
+        for SUBTEST_METADATA in "${sorted_subtests[@]}"; do
+            IFS='|' read -r SUBTEST_DIR SUBTEST_NAME SUBTEST_ID <<< "$SUBTEST_METADATA"
+            INDEX=$((INDEX + 1))
+            if [[ $INDEX -eq $COUNT ]]; then
+                build_test_tree "$SUBTEST_DIR" "${PREFIX}    " "true"
+            else
+                build_test_tree "$SUBTEST_DIR" "${PREFIX}│   " "false"
+            fi
         done
     fi
 }
 
-# Main function to display the test tree
-display_tests_tree() {
-    ROOT_DIR=$(get_root_dir)
-    SETTINGS_FILE="$ROOT_DIR/settings.yaml"
-    
-    # Retrieve the tests directory from settings.yaml
-    TESTS_DIR=$(get_tests_dir)
+# Function to display the test tree
+show_test_tree() {
+    local ROOT_DIR="$1"
+    local TESTS_DIR="$ROOT_DIR/Tests"
 
-    # Check if the tests directory exists
-    if [[ -z "$TESTS_DIR" || ! -d "$ROOT_DIR/$TESTS_DIR" ]]; then
-        echo "Error: Tests directory not found in the project. Check the value of 'tests_dir' in settings.yaml."
+    if [[ ! -d "$TESTS_DIR" ]]; then
+        echo "Error: Tests directory not found at $TESTS_DIR."
         exit 1
     fi
 
-    TESTS_PATH="$ROOT_DIR/$TESTS_DIR"
-    echo "Project Test Tree:"
-    echo
+    echo ""
+    echo "Test Tree:"
+    echo "----------"
 
-    # List all top-level tests
-    IFS=$'\n' read -rd '' -a TOP_TESTS <<< "$(find "$TESTS_PATH" -mindepth 1 -maxdepth 1 -type d | sort)"
-    for TEST_PATH in "${TOP_TESTS[@]}"; do
-        # Properly handle test directories with spaces
-        display_test_tree "$TEST_PATH" ""
+    # Iterate through all tests in the Tests directory
+    local TESTS=("$TESTS_DIR"/*)
+    local TESTS_WITH_METADATA=()
+
+    # Collect all tests and their metadata
+    for TEST in "${TESTS[@]}"; do
+        if [[ -d "$TEST" ]]; then
+            local METADATA_FILE="$TEST/metadata.yaml"
+            if [[ -f "$METADATA_FILE" ]]; then
+                local TEST_NAME=$(yq eval '.description' "$METADATA_FILE")
+                local TEST_ID=$(yq eval '.test_id' "$METADATA_FILE")
+                TESTS_WITH_METADATA+=("$TEST|$TEST_NAME|$TEST_ID")
+            fi
+        fi
     done
+
+    # Sort the tests by test ID
+    IFS=$'\n' sorted_tests=($(for test in "${TESTS_WITH_METADATA[@]}"; do echo "$test"; done | sort -t '|' -k3))
+    unset IFS
+
+    # Iterate over sorted tests and display them
+    local COUNT=${#sorted_tests[@]}
+    local INDEX=0
+
+    for TEST_METADATA in "${sorted_tests[@]}"; do
+        IFS='|' read -r TEST_DIR TEST_NAME TEST_ID <<< "$TEST_METADATA"
+        INDEX=$((INDEX + 1))
+        if [[ $INDEX -eq $COUNT ]]; then
+            build_test_tree "$TEST_DIR" "" "true"
+        else
+            build_test_tree "$TEST_DIR" "" "false"
+        fi
+    done
+
+echo ""
 }
 
-# Run the function to display the tree structure
-display_tests_tree
+# Main script execution
+ROOT_DIR=$(find_root_dir)  # Find the root directory
+show_test_tree "$ROOT_DIR"  # Display the test tree

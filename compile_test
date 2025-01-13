@@ -1,0 +1,172 @@
+#!/bin/bash
+
+# Ensure the script is run from the test directory
+TEST_DIR="$(pwd)"
+METADATA_FILE="$TEST_DIR/metadata.yaml"
+
+# Check if metadata.yaml exists
+if [[ ! -f "$METADATA_FILE" ]]; then
+    echo "Error: metadata.yaml not found in $TEST_DIR."
+    exit 1
+fi
+
+# Function to get the root directory of the project by looking for settings.yaml
+get_root_dir() {
+    DIR="$(pwd)"
+    while [[ ! -f "$DIR/settings.yaml" && "$DIR" != "/" ]]; do
+        DIR=$(dirname "$DIR")
+    done
+
+    if [[ -f "$DIR/settings.yaml" ]]; then
+        echo "$DIR"
+    else
+        echo "Error: settings.yaml not found in any parent directory."
+        exit 1
+    fi
+}
+
+# Get the root directory
+ROOT_DIR=$(get_root_dir)
+
+# Retrieve settings from settings.yaml
+SETTINGS_FILE="$ROOT_DIR/settings.yaml"
+if [[ ! -f "$SETTINGS_FILE" ]]; then
+    echo "Error: settings.yaml not found at $SETTINGS_FILE."
+    exit 1
+fi
+
+# Read test details from metadata.yaml
+TEST_NAME=$(yq eval '.test_name' "$METADATA_FILE")
+TEST_ID=$(yq eval '.test_id' "$METADATA_FILE")
+BINARIES_DIR="$ROOT_DIR/$(yq eval '.project.binaries_dir' "$SETTINGS_FILE")"
+
+# Retrieve the compile script path from settings.yaml
+COMPILE_SCRIPT="$ROOT_DIR/$(yq eval '.scripts.compile' "$SETTINGS_FILE")"
+
+# Check if the compile script exists
+if [[ ! -f "$COMPILE_SCRIPT" ]]; then
+    echo "Error: Compile script not found at $COMPILE_SCRIPT."
+    exit 1
+fi
+
+# Copy dependencies from the test directory to their respective locations
+DEPENDENCIES=$(yq eval '.dependencies' "$METADATA_FILE")
+DEPENDENCY_COUNT=$(echo "$DEPENDENCIES" | yq eval 'length' -)
+
+DEPENDENCY_HASHES=""
+
+# Calculate hashes for all dependencies
+for ((i = 0; i < DEPENDENCY_COUNT; i++)); do
+    DEPENDENCY_LOCATION=$(echo "$DEPENDENCIES" | yq eval ".[$i].location" -)
+    DEPENDENCY_PATH=$(echo "$DEPENDENCIES" | yq eval ".[$i].path" -)
+    DEPENDENCY_SOURCE="$TEST_DIR/dependencies/$(basename "$DEPENDENCY_PATH")"
+    DEPENDENCY_DESTINATION="$DEPENDENCY_LOCATION/$DEPENDENCY_PATH"
+
+    # Check if the dependency exists in the test directory
+    if [[ ! -f "$DEPENDENCY_SOURCE" ]]; then
+        echo "Error: Dependency not found at $DEPENDENCY_SOURCE."
+        exit 1
+    fi
+
+    # Calculate the hash of the dependency file
+    DEPENDENCY_HASH=$(sha256sum "$DEPENDENCY_SOURCE" | cut -d ' ' -f 1)
+
+    # Store the hash and path
+    DEPENDENCY_HASHES="$DEPENDENCY_HASHES $DEPENDENCY_PATH:$DEPENDENCY_HASH"
+    
+    # Copy the dependency to its destination
+    mkdir -p "$(dirname "$DEPENDENCY_DESTINATION")"
+    cp "$DEPENDENCY_SOURCE" "$DEPENDENCY_DESTINATION"
+done
+
+# Check if an existing binary matches ALL dependency hashes
+EXISTING_BINARY=""
+MATCHING_BINARY_FOUND=false
+
+for BINARY_HASH_FILE in "$BINARIES_DIR"/*.hashes; do
+    if [[ -f "$BINARY_HASH_FILE" ]]; then
+        # Read the hashes from the existing binary's companion file
+        EXISTING_HASHES=$(cat "$BINARY_HASH_FILE")
+
+        # Check if ALL current dependency hashes match the existing binary's hashes
+        ALL_MATCH=true
+        for DEPENDENCY_HASH in $DEPENDENCY_HASHES; do
+            if [[ ! "$EXISTING_HASHES" =~ "$DEPENDENCY_HASH" ]]; then
+                ALL_MATCH=false
+                break
+            fi
+        done
+
+        # If all hashes match, use this binary
+        if [[ "$ALL_MATCH" == true ]]; then
+            EXISTING_BINARY="$BINARY_HASH_FILE"
+            MATCHING_BINARY_FOUND=true
+            break
+        fi
+    fi
+done
+
+if [[ "$MATCHING_BINARY_FOUND" == true ]]; then
+    # If the binary exists and all hashes match, just copy and rename it
+    EXISTING_BINARY_PATH="${EXISTING_BINARY%.hashes}"
+
+    BINARY_DESTINATION="$BINARIES_DIR/$TEST_NAME"
+
+    # Check if the source and destination are the same
+    if [[ "$EXISTING_BINARY_PATH" != "$BINARY_DESTINATION" ]]; then
+        cp "$EXISTING_BINARY_PATH" "$BINARY_DESTINATION"
+        cp "$EXISTING_BINARY" "$BINARY_DESTINATION.hashes"
+    fi
+
+    # Update the metadata to point to the new binary
+    yq eval ".binary_path = \"$BINARY_DESTINATION\"" -i "$METADATA_FILE"
+
+    echo "Binary already exists with matching dependencies. Skipping compilation and using the existing binary."
+else
+    # If no matching binary is found, proceed with the compilation
+    cd "$ROOT_DIR"  # Ensure we are in the root directory for compilation
+    "$COMPILE_SCRIPT"
+
+    # Check if the compilation was successful
+    if [[ $? -ne 0 ]]; then
+        echo "Error: Compilation failed."
+        exit 1
+    fi
+
+    # Define the name of the compiled binary
+    COMPILED_BINARY_NAME="croco"  # Replace with the actual name of the compiled binary
+    COMPILED_BINARY_PATH="$ROOT_DIR/$COMPILED_BINARY_NAME"
+
+    # Check if the compiled binary exists
+    if [[ ! -f "$COMPILED_BINARY_PATH" ]]; then
+        echo "Error: Compiled binary not found at $COMPILED_BINARY_PATH."
+        exit 1
+    fi
+
+    # Move and rename the binary to the binaries directory
+    BINARY_DESTINATION="$BINARIES_DIR/$TEST_NAME"
+    mv "$COMPILED_BINARY_PATH" "$BINARY_DESTINATION"
+
+    # Create a companion file to store the dependency hashes
+    COMPANION_FILE="$BINARY_DESTINATION.hashes"
+    echo "$DEPENDENCY_HASHES" > "$COMPANION_FILE"
+
+    # Update the metadata to include the binary path
+    yq eval ".binary_path = \"$BINARY_DESTINATION\"" -i "$METADATA_FILE"
+
+    echo "Binary compiled and associated with the test successfully."
+
+    # Cleanup: Remove generated files and folders
+    echo "Cleaning up generated files and folders..."
+    rm -rf "$ROOT_DIR/Compile"
+    rm -rf "$ROOT_DIR/MUSTANG_NAMELIST"
+    rm -f "$ROOT_DIR/croco.in"
+    rm -f "$ROOT_DIR/kRGB61.txt"
+    rm -f "$ROOT_DIR/kRGB61.txt.1"
+    rm -f "$ROOT_DIR/namelist_pisces_cfg"
+    rm -f "$ROOT_DIR/namelist_pisces_cfg.1"
+    rm -f "$ROOT_DIR/namelist_pisces_ref"
+    rm -f "$ROOT_DIR/namelist_pisces_ref.1"
+    rm -f "$ROOT_DIR/ncjoin"
+    rm -f "$ROOT_DIR/partit"
+fi

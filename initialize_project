@@ -1,111 +1,312 @@
 #!/bin/bash
-# Initialize the project directory structure and settings.
+# Initialize project directory structure using functional programming principles
 
-# Function to get the root directory of the project by looking for settings.yaml
-get_root_dir() {
-    DIR="$(pwd)"
-    while [[ ! -f "$DIR/settings.yaml" && "$DIR" != "/" ]]; do
-        DIR=$(dirname "$DIR")
-    done
+set -euo pipefail
 
-    if [[ -f "$DIR/settings.yaml" ]]; then
-        echo "$DIR"
-    else
-        echo "$(pwd)"
-        exit 1
+# Configuration defaults
+declare FORCE_REINIT=false
+declare DRY_RUN=false
+declare VERBOSE=false
+declare -r DEFAULT_CROCO_RELATIVE_PATH="../../croco"
+declare -r CONFIRM_PHRASE="I understand that this will erase all existing data and cannot be undone"
+
+# Print usage information
+print_usage() {
+    cat << EOF
+Usage: $(basename "$0") [-F] [-d] [-v] [-h]
+Initialize project directory structure and settings.
+
+Options:
+    -F    Force reinitialization (overwrite existing settings)
+    -d    Dry run (show what would be done without making changes)
+    -v    Verbose mode (show detailed output)
+    -h    Show this help message
+EOF
+}
+
+# Error handling function
+error_exit() {
+    echo "Error: $1" >&2
+    exit "${2:-1}"
+}
+
+# Success message function
+log_success() {
+    echo "Success: $1"
+}
+
+# Warning message function
+log_warning() {
+    echo "Warning: $1" >&2
+}
+
+# Verbose logging function
+log_verbose() {
+    if [[ "$VERBOSE" == true ]]; then
+        echo "Verbose: $1"
     fi
 }
 
-# Get the root directory
-ROOT_DIR=$(get_root_dir)
+# Find project root directory
+find_root_dir() {
+    local dir="$(pwd)"
+    while [[ ! -f "$dir/settings.yaml" && "$dir" != "/" ]]; do
+        dir=$(dirname "$dir")
+    done
+    echo "$dir"
+}
 
-# Set paths relative to the root directory
-SETTINGS_FILE="$ROOT_DIR/settings.yaml"
-TESTS_DIR="$ROOT_DIR/Tests"
-BINARIES_DIR="$ROOT_DIR/Binaries"
-CROCO_DIR_RELATIVE="../../croco"  # Relative path for croco, adjusted from absolute path
-CROCO_DIR=$(realpath "$ROOT_DIR/$CROCO_DIR_RELATIVE")  # Resolve relative path to absolute
+# Validate directory exists and is writable
+validate_directory() {
+    local dir="$1"
+    [[ ! -d "$dir" ]] && error_exit "Directory $dir does not exist"
+    [[ ! -w "$dir" ]] && error_exit "No write permission in $dir"
+    return 0
+}
 
-CPPDEFS_FILE="$CROCO_DIR/OCEAN/cppdefs.h"
-BIO_NCHL_FILE="$CROCO_DIR/OCEAN/bio_NChlPZD.F"
-T3DMIX_FILE="$CROCO_DIR/OCEAN/t3dmix_S.F"
-COMPILE_SCRIPT="$ROOT_DIR/jobcomp"
+# Parse command line arguments
+parse_arguments() {
+    while getopts "Fdvh" opt; do
+        case $opt in
+            F) FORCE_REINIT=true ;;
+            d) DRY_RUN=true ;;
+            v) VERBOSE=true ;;
+            h) print_usage; exit 0 ;;
+            *) print_usage; exit 1 ;;
+        esac
+    done
+}
 
-FORCE_REINIT=false
+# Initialize project paths
+init_paths() {
+    local root_dir="$1"
+    local paths
+    declare -A paths
+    paths[ROOT_DIR]="$root_dir"
+    paths[SETTINGS_FILE]="$root_dir/settings.yaml"
+    paths[TESTS_DIR]="$root_dir/Tests"
+    paths[BINARIES_DIR]="$root_dir/Binaries"
+    paths[CROCO_DIR]=$(realpath "$root_dir/$DEFAULT_CROCO_RELATIVE_PATH" 2>/dev/null || echo "")
+    echo "$(declare -p paths)"
+}
 
-# Parse the -F flag
-if [[ "$1" == "-F" ]]; then
-    FORCE_REINIT=true
-    echo "Force reinitialization enabled. Existing settings and directories will be overwritten."
-fi
+# Validate CROCO directory
+validate_croco_dir() {
+    local croco_dir="$1"
+    if [[ ! -d "$croco_dir" ]]; then
+        log_warning "CROCO directory not found at $croco_dir"
+        read -p "Continue anyway? (y/N) " -r
+        [[ ! $REPLY =~ ^[Yy]$ ]] && error_exit "CROCO directory validation failed"
+    fi
+}
 
-# Check if settings.yaml exists
-if [[ -f "$SETTINGS_FILE" && "$FORCE_REINIT" == false ]]; then
-    echo "settings.yaml already exists. Use -F flag to force reinitialization."
-    exit 0
-fi
+# Backup existing settings
+backup_settings() {
+    local settings_file="$1"
+    if [[ -f "$settings_file" ]]; then
+        # Extract the directory and filename from the settings file path
+        local settings_dir=$(dirname "$settings_file")
+        local settings_filename=$(basename "$settings_file")
 
-#Confirm all the settings before proceeding. Ask for confirmation using Y or N
-echo "ROOT_DIR: '$ROOT_DIR'"
-echo "TESTS_DIR: '$TESTS_DIR'"
-echo "BINARIES_DIR: '$BINARIES_DIR'"
-echo "CROCO_DIR: '$CROCO_DIR'"
-echo "CPPDEFS_FILE: '$CPPDEFS_FILE'"
-echo "BIO_NCHL_FILE: '$BIO_NCHL_FILE'"
-echo "T3DMIX_FILE: '$T3DMIX_FILE'"
-echo "COMPILE_SCRIPT: '$COMPILE_SCRIPT'"
+        # Create a backup filename with a timestamp
+        local backup_file="${settings_filename}.$(date +%Y%m%d_%H%M%S).bak"
 
-read -p "Do you want to proceed with the above settings? (Y/N): " CONFIRM
-if [[ "$CONFIRM" != "Y" && "$CONFIRM" != "y" ]]; then
-    echo "Initialization cancelled."
-    exit 0
-fi
+        # Ensure the backups directory exists
+        local backup_dir="${settings_dir}/backups"
+        mkdir -p "$backup_dir"
 
+        # Copy the settings file to the backup directory
+        if cp "$settings_file" "${backup_dir}/${backup_file}"; then
+            log_success "Created backup: ${backup_dir}/${backup_file}"
+        else
+            error_exit "Failed to create backup for $settings_file"
+        fi
+    else
+        log_warning "Settings file '$settings_file' does not exist."
+    fi
+}
 
-# Create or overwrite settings.yaml
+# List existing tests and subtests
+list_tests_and_subtests() {
+    local tests_dir="$1"
+    echo "Existing tests and subtests that will be deleted:"
+    echo "-----------------------------------------------"
+    find "$tests_dir" -mindepth 1 -maxdepth 1 -type d | while read -r test_dir; do
+        echo "Test: $(basename "$test_dir")"
+        find "$test_dir/subtests" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | while read -r subtest_dir; do
+            echo "  Subtest: $(basename "$subtest_dir")"
+        done
+    done
+    echo "-----------------------------------------------"
+}
 
-echo "Creating settings.yaml..."
-cat > "$SETTINGS_FILE" <<EOL
+# Confirm destructive action with a long phrase
+confirm_destructive_action() {
+    echo "WARNING: This action will erase all existing data and cannot be undone."
+    echo "To confirm, type the following phrase exactly:"
+    echo ""
+    echo "  $CONFIRM_PHRASE"
+    echo ""
+    read -p "> " -r USER_INPUT
+    if [[ "$USER_INPUT" != "$CONFIRM_PHRASE" ]]; then
+        error_exit "Confirmation phrase does not match. Aborting."
+    fi
+    echo ""
+    
+
+    log_success "Destructive action confirmed."
+}
+
+# Generate settings content
+generate_settings() {
+    local root_dir="$1"
+    local croco_dir="$2"
+    cat <<EOL
 # Project Settings
 project:
-  root_dir: "$ROOT_DIR"
+  root_dir: &root_dir "$root_dir"
   tests_dir: "Tests"
   binaries_dir: "Binaries"
-  croco_dir: "$CROCO_DIR"  # Full path for croco
+  croco_dir: &croco_dir "$croco_dir"
+  created_at: "$(date +'%Y-%m-%dT%H:%M:%SZ')"
+  last_modified: "$(date +'%Y-%m-%dT%H:%M:%SZ')"
 
 # Dependency Tracking
 dependencies:
-  files:
-    - location: "root_dir"
-      path: "cppdefs.h"  # This file is relative to root_dir
-    - location: "croco_dir"
-      path: "OCEAN/bio_NChlPZD.F"  # This file is relative to croco_dir
-    - location: "croco_dir"
-      path: "OCEAN/t3dmix_S.F"  # This file is relative to croco_dir
-
-# Metadata Options
-metadata:
-  enable_tracking: true
-  track_parameters: true
+  - location: *root_dir
+    path: "cppdefs.h"
+  - location: *croco_dir
+    path: "OCEAN/bio_NChlPZD.F"
+  - location: *croco_dir
+    path: "OCEAN/t3dmix_S.F"
 
 # Scripts
 scripts:
   compile: "./jobcomp"
   browse_tests: "./browse_tests.py"
+
 EOL
-echo "settings.yaml created or overwritten."
+}
 
-# Create directory structure
-if [[ "$FORCE_REINIT" == true ]]; then
-    echo "Removing existing directories..."
-    rm -rf "$TESTS_DIR" "$BINARIES_DIR"
-fi
+# Generate gitignore content
+generate_gitignore() {
+    cat <<EOL
+# Generated directories
+Binaries/*
+!Binaries/.gitkeep
 
-mkdir -p "$TESTS_DIR" "$BINARIES_DIR"
-echo "Project initialized. Tests and Binaries directories created."
+# Backup files
+*.bak
+*.backup
+*~
 
-# If the jobcomp script doesn't exist, give an error message
-if [[ ! -f "$COMPILE_SCRIPT" || ! -x "$COMPILE_SCRIPT" ]]; then
-    echo "Error: Compilation script '$COMPILE_SCRIPT' not found or not executable. Please check the path."
-    exit 1
-fi
+# System files
+.DS_Store
+Thumbs.db
+EOL
+}
+
+# Create project directories
+create_directories() {
+    local tests_dir="$1"
+    local binaries_dir="$2"
+    
+    if [[ "$FORCE_REINIT" == true ]]; then
+        log_verbose "Force reinitialization enabled. Removing existing directories."
+        if [[ "$DRY_RUN" == false ]]; then
+            rm -rf "$tests_dir" "$binaries_dir"
+        else
+            log_verbose "Dry run: Would remove $tests_dir and $binaries_dir"
+        fi
+    fi
+
+    if [[ "$DRY_RUN" == false ]]; then
+        mkdir -p "$tests_dir" "$binaries_dir"
+        chmod 755 "$tests_dir" "$binaries_dir"
+        log_success "Created project directories"
+    else
+        log_verbose "Dry run: Would create $tests_dir and $binaries_dir"
+    fi
+}
+
+# Validate compilation script
+validate_compile_script() {
+    local root_dir="$1"
+    local compile_script="$root_dir/jobcomp"
+    if [[ ! -f "$compile_script" || ! -x "$compile_script" ]]; then
+        error_exit "Compilation script '$compile_script' not found or not executable"
+    fi
+}
+
+# Write settings file
+write_settings() {
+    local settings_file="$1"
+    local root_dir="$2"
+    local croco_dir="$3"
+    
+    if [[ "$DRY_RUN" == false ]]; then
+        generate_settings "$root_dir" "$croco_dir" > "$settings_file"
+        log_success "Created settings file"
+    else
+        log_verbose "Dry run: Would write settings to $settings_file"
+    fi
+}
+
+# Write gitignore file
+write_gitignore() {
+    local root_dir="$1"
+    local gitignore_file="$root_dir/.gitignore"
+    
+    if [[ ! -f "$gitignore_file" ]]; then
+        if [[ "$DRY_RUN" == false ]]; then
+            generate_gitignore > "$gitignore_file"
+            log_success "Created .gitignore file"
+        else
+            log_verbose "Dry run: Would create .gitignore file"
+        fi
+    fi
+}
+
+# Main function to orchestrate initialization
+main() {
+    parse_arguments "$@"
+    
+    # Initialize and validate paths
+    local root_dir=$(find_root_dir)
+    [[ "$root_dir" == "/" ]] && error_exit "Root directory not found"
+    
+    eval "$(init_paths "$root_dir")"
+    validate_croco_dir "${paths[CROCO_DIR]}"
+    
+    # Check existing settings
+    if [[ -f "${paths[SETTINGS_FILE]}" && "$FORCE_REINIT" == false ]]; then
+        error_exit "settings.yaml already exists. Use -F flag to force reinitialization"
+    fi
+    
+    # Perform initialization
+    if [[ "$FORCE_REINIT" == true ]]; then
+        log_verbose "Force reinitialization enabled. Backing up existing settings."
+        backup_settings "${paths[SETTINGS_FILE]}"
+        
+        # List existing tests and subtests
+        list_tests_and_subtests "${paths[TESTS_DIR]}"
+        
+        # Confirm destructive action
+        confirm_destructive_action
+    fi
+
+    create_directories "${paths[TESTS_DIR]}" "${paths[BINARIES_DIR]}"
+    write_settings "${paths[SETTINGS_FILE]}" "${paths[ROOT_DIR]}" "${paths[CROCO_DIR]}"
+    write_gitignore "${paths[ROOT_DIR]}"
+    validate_compile_script "${paths[ROOT_DIR]}"
+    
+    # Final success message
+    log_success "Project initialization complete!"
+    echo "Created directories:"
+    echo "  - Tests: ${paths[TESTS_DIR]}"
+    echo "  - Binaries: ${paths[BINARIES_DIR]}"
+    echo "Settings file: ${paths[SETTINGS_FILE]}"
+}
+
+# Execute main function
+main "$@"

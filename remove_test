@@ -22,7 +22,7 @@ is_binary_used_by_other_tests() {
     BINARY_NAME="$3"
 
     # Scan through all tests to check if the binary is referenced in metadata
-    for TEST_DIR in "$ROOT_DIR"/*; do
+    for TEST_DIR in "$ROOT_DIR/Tests"/*; do
         if [[ -d "$TEST_DIR" ]]; then
             METADATA_FILE="$TEST_DIR/metadata.yaml"
             if [[ -f "$METADATA_FILE" ]]; then
@@ -43,6 +43,7 @@ is_binary_used_by_other_tests() {
 find_subtests() {
     local PARENT_TEST_PATH=$1
     local SUBTESTS_DIR="$PARENT_TEST_PATH/subtests"
+    local SUBTEST_COUNT=0  # Initialize subtest count
 
     # Check if the subtests directory exists
     if [[ -d "$SUBTESTS_DIR" ]]; then
@@ -54,7 +55,7 @@ find_subtests() {
                 if [[ -f "$METADATA_FILE" ]]; then
                     # Extract the test_name from metadata.yaml
                     local TEST_NAME
-                    TEST_NAME=$(awk '/test_name:/ {print $2}' "$METADATA_FILE" | xargs)
+                    TEST_NAME=$(yq eval '.test_name' "$METADATA_FILE")
 
                     # Increment the subtest count
                     ((SUBTEST_COUNT++))
@@ -71,12 +72,43 @@ find_subtests() {
             fi
         done
     fi
+    return $SUBTEST_COUNT
+}
+
+# Function to find the test path by searching recursively for the test ID in metadata
+find_test_by_id_recursive() {
+    local SEARCH_DIR="$1"
+    local TEST_ID="$2"
+
+    # Iterate through all directories in the search directory
+    for TEST_DIR in "$SEARCH_DIR"/*; do
+        if [[ -d "$TEST_DIR" ]]; then
+            METADATA_FILE="$TEST_DIR/metadata.yaml"
+            if [[ -f "$METADATA_FILE" ]]; then
+                TEST_ID_IN_METADATA=$(yq eval '.test_id' "$METADATA_FILE")
+                if [[ "$TEST_ID_IN_METADATA" == "$TEST_ID" ]]; then
+                    echo "$TEST_DIR"  # Return the test directory path
+                    return 0
+                fi
+            fi
+
+            # Recursively search subdirectories (subtests)
+            RESULT=$(find_test_by_id_recursive "$TEST_DIR" "$TEST_ID")
+            if [[ -n "$RESULT" ]]; then
+                echo "$RESULT"  # Return the result of the recursive call
+                return 0
+            fi
+        fi
+    done
+
+    # Test not found
+    return 1
 }
 
 # Function to remove a test and update any tracking information
 remove_test() {
     if [[ -z "$1" ]]; then
-        echo "Error: No test name provided."
+        echo "Error: No test ID provided."
         exit 1
     fi
 
@@ -84,13 +116,15 @@ remove_test() {
     SETTINGS_FILE="$ROOT_DIR/settings.yaml"
 
     # Retrieve settings from settings.yaml
-    TESTS_DIR=$(awk '/tests_dir:/ {print $2}' "$SETTINGS_FILE" | xargs)
-    BINARIES_DIR=$(awk '/binaries_dir:/ {print $2}' "$SETTINGS_FILE" | xargs)
+    TESTS_DIR=$(yq eval '.tests_dir' "$SETTINGS_FILE")
+    BINARIES_DIR=$(yq eval '.binaries_dir' "$SETTINGS_FILE")
+
+    # Find the test by ID recursively
+    TEST_PATH=$(find_test_by_id_recursive "$ROOT_DIR/$TESTS_DIR" "$1")
 
     # Check if the test directory exists
-    TEST_PATH="$ROOT_DIR/$TESTS_DIR/$1"
     if [[ ! -d "$TEST_PATH" ]]; then
-        echo "Error: Test '$1' does not exist."
+        echo "Error: Test with ID '$1' does not exist."
         exit 1
     fi
 
@@ -111,13 +145,14 @@ remove_test() {
     if [[ -d "$TEST_PATH" ]]; then
         echo "Found subtests:"
         find_subtests "$TEST_PATH"
+        SUBTEST_COUNT=$?  # Capture the return value of find_subtests function
         echo "Total subtests found: $SUBTEST_COUNT"
     else
-        echo "Error: Test '$1' does not exist."
+        echo "Error: Test with ID '$1' does not exist."
         exit 1
     fi
 
-    read -p "Are you sure you want to remove test '$1' and all its subtests? (y/n): " CONFIRM
+    read -p "Are you sure you want to remove test with ID '$1' and all its subtests? (y/n): " CONFIRM
     if [[ ! "$CONFIRM" =~ ^[Yy]$ ]]; then
         echo "Test removal aborted."
         exit 0
@@ -126,17 +161,25 @@ remove_test() {
     # Remove test metadata and directory
     METADATA_FILE="$TEST_PATH/metadata.yaml"
     if [[ -f "$METADATA_FILE" ]]; then
-        echo "Removing metadata for test '$1'..."
-        PARENT_TEST=$(grep "parent_test:" "$METADATA_FILE" | awk '{print $2}' | xargs)
+        echo "Removing metadata for test with ID '$1'..."
+        PARENT_TEST=$(yq eval '.parent_test' "$METADATA_FILE")
         if [[ -n "$PARENT_TEST" ]]; then
             PARENT_TEST_PATH="$ROOT_DIR/$TESTS_DIR/$PARENT_TEST/metadata.yaml"
             if [[ -f "$PARENT_TEST_PATH" ]]; then
-                sed -i "s/parent_test: $1/parent_test: null/" "$PARENT_TEST_PATH"
+                yq eval -i '.parent_test = null' "$PARENT_TEST_PATH"
                 echo "Updated parent test '$PARENT_TEST' to remove reference to '$1'."
             fi
         fi
         rm "$METADATA_FILE"
-        echo "Metadata for test '$1' removed."
+        echo "Metadata for test with ID '$1' removed."
+    fi
+
+    # Backup test directory before deletion
+    read -p "Do you want to create a backup of the test before deletion? (y/n): " BACKUP_CONFIRM
+    if [[ "$BACKUP_CONFIRM" =~ ^[Yy]$ ]]; then
+        BACKUP_DIR="$TEST_PATH-backup"
+        cp -r "$TEST_PATH" "$BACKUP_DIR"
+        echo "Backup created at $BACKUP_DIR"
     fi
 
     echo "Removing test directory '$TEST_PATH'..."
@@ -147,10 +190,10 @@ remove_test() {
     BINARY_FILE="$ROOT_DIR/$BINARIES_DIR/$1"
     if [[ -f "$BINARY_FILE" ]]; then
         if is_binary_used_by_other_tests "$ROOT_DIR" "$BINARIES_DIR" "$1"; then
-            echo "Binary for test '$1' is still in use by another test. Not removing the binary."
+            echo "Binary for test with ID '$1' is still in use by another test. Not removing the binary."
         else
             rm "$BINARY_FILE"
-            echo "Binary for test '$1' removed."
+            echo "Binary for test with ID '$1' removed."
         fi
     fi
 }

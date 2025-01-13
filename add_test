@@ -1,6 +1,5 @@
 #!/bin/bash
 
-
 # Function to get the root directory of the project by looking for settings.yaml
 get_root_dir() {
     DIR="$(pwd)"
@@ -16,141 +15,204 @@ get_root_dir() {
     fi
 }
 
+# Function to get the next test ID
+get_next_test_id() {
+    local TESTS_DIR="$1"
+    local LAST_TEST_ID=$(find "$TESTS_DIR" -name "metadata.yaml" -exec yq eval '.test_id' {} \; | sort -n | tail -1)
+    if [[ -z "$LAST_TEST_ID" ]]; then
+        echo "1"
+    else
+        echo "$((LAST_TEST_ID + 1))"
+    fi
+}
+
+# Function to list tests with their IDs and names
+list_tests() {
+    local TESTS_DIR="$1"
+    echo "Available Tests:"
+    echo "----------------"
+    find "$TESTS_DIR" -name "metadata.yaml" | while read -r METADATA_FILE; do
+        TEST_ID=$(yq eval '.test_id' "$METADATA_FILE")
+        TEST_NAME=$(yq eval '.test_name' "$METADATA_FILE")
+        echo "$TEST_ID: $TEST_NAME"
+    done
+}
+
 # Get the root directory
 ROOT_DIR=$(get_root_dir)
 
 # Retrieve settings from settings.yaml
 SETTINGS_FILE="$ROOT_DIR/settings.yaml"
-TESTS_DIR=$(awk '/tests_dir:/ {print $2}' "$SETTINGS_FILE" | xargs)
-BINARIES_DIR=$(awk '/binaries_dir:/ {print $2}' "$SETTINGS_FILE" | xargs)
+TESTS_DIR="$ROOT_DIR/$(yq eval '.project.tests_dir' "$SETTINGS_FILE")"
+BINARIES_DIR="$ROOT_DIR/$(yq eval '.project.binaries_dir' "$SETTINGS_FILE")"
+CROCO_DIR=$(yq eval '.project.croco_dir' "$SETTINGS_FILE")
+BASE_FILES_DIR="$ROOT_DIR/$(yq eval '.project.base_files_dir' "$SETTINGS_FILE")"
 
-CROCO_DIR_RELATIVE=$(awk '/croco_dir:/ {print $2}' "$SETTINGS_FILE" | xargs)
-COMPILE_SCRIPT=$(awk '/compile:/ {print $2}' "$SETTINGS_FILE" | xargs)
+echo "ROOT_DIR=$ROOT_DIR"
+echo "TESTS_DIR=$TESTS_DIR"
+echo "BINARIES_DIR=$BINARIES_DIR"
+echo "CROCO_DIR=$CROCO_DIR"
+echo "BASE_FILES_DIR=$BASE_FILES_DIR"
 
-# Debug output to check the values
-echo "ROOT_DIR: '$ROOT_DIR'"
-echo "CROCO_DIR_RELATIVE: '$CROCO_DIR_RELATIVE'"
-echo "COMPILE_SCRIPT: '$COMPILE_SCRIPT'"
 
-# Resolve the absolute path for CROCO_DIR
-# If the path is absolute, just use it directly, otherwise resolve it relative to ROOT_DIR
-if [[ "$CROCO_DIR_RELATIVE" =~ ^/ ]]; then
-    CROCO_DIR="$CROCO_DIR_RELATIVE"  # Absolute path, no need to prepend ROOT_DIR
+# Get the next test ID
+NEXT_TEST_ID=$(get_next_test_id "$TESTS_DIR")
+
+echo "NEXT_TEST_ID=$NEXT_TEST_ID"
+
+# Prompt for a descriptive suffix
+read -p "Enter a short description of the test (e.g., HighDiffusivity_Bio): " DESCRIPTION
+if [[ -z "$DESCRIPTION" ]]; then
+    echo "Error: Description cannot be empty."
+    exit 1
+fi
+
+# Prompt for the reason for creating the test
+read -p "Enter the reason for creating this test: " REASON
+if [[ -z "$REASON" ]]; then
+    echo "Error: Reason cannot be empty."
+    exit 1
+fi
+
+# Ask if the test is based on a previous test
+read -p "Is this test based on a previous test? (y/n): " HAS_PARENT
+if [[ "$HAS_PARENT" =~ ^[Yy]$ ]]; then
+    list_tests "$TESTS_DIR"
+    read -p "Enter the ID of the parent test: " PARENT_TEST_ID
+
+    # Validate parent test ID
+    PARENT_TEST_PATH=$(find "$TESTS_DIR" -name "metadata.yaml" -exec grep -l "test_id: $PARENT_TEST_ID" {} + | xargs dirname)
+    if [[ -z "$PARENT_TEST_PATH" ]]; then
+        echo "Error: Parent test with ID $PARENT_TEST_ID not found."
+        exit 1
+    fi
+
+    PARENT_TEST_NAME=$(yq eval '.test_name' "$PARENT_TEST_PATH/metadata.yaml")
 else
-    CROCO_DIR="$ROOT_DIR/$CROCO_DIR_RELATIVE"  # Resolve relative to ROOT_DIR
+    PARENT_TEST_ID="null"
+    PARENT_TEST_NAME="null"
 fi
 
-# Verify CROCO_DIR existence
-if [[ ! -d "$CROCO_DIR" ]]; then
-    echo "Error: CROCO directory '$CROCO_DIR' not found. Check settings.yaml."
-    exit 1
-fi
-
-# Ensure COMPILE_SCRIPT is relative to the ROOT_DIR
-COMPILE_SCRIPT_PATH="$ROOT_DIR/$COMPILE_SCRIPT"
-if [[ ! -x "$COMPILE_SCRIPT_PATH" ]]; then
-    echo "Warning: Compilation script '$COMPILE_SCRIPT_PATH' not found or not executable. Creating dummy binary."
-fi
-
-# Prompt for test name
-read -p "Enter the name of the base test: " TEST_NAME
-if [[ -z "$TEST_NAME" ]]; then
-    echo "Error: Test name cannot be empty."
-    exit 1
-fi
+# Generate the test name
+TEST_NAME="Test${NEXT_TEST_ID}_${DESCRIPTION}"
 
 # Check if the test already exists
 if [[ -d "$ROOT_DIR/$TESTS_DIR/$TEST_NAME" ]]; then
-    echo "Error: Test '$TEST_NAME' already exists. Please choose a different name."
+    echo "Error: Test '$TEST_NAME' already exists. Please choose a different description."
     exit 1
 fi
 
-# Confirm the test creation with all the details
+# Confirm the test creation
 echo ""
-echo "Creating a base test with the following details:"
-echo "Test name: $TEST_NAME"
-echo "Tests directory: $ROOT_DIR/$TESTS_DIR"
-echo "Binaries directory: $ROOT_DIR/$BINARIES_DIR"
-
-# Confirm the creation
-read -p "Do you want to proceed with the creation of the base test? (y/n): " -n 1 -r
-echo
-if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-    echo "Base test creation aborted."
-    exit 1
+echo "Creating a new test with the following details:"
+echo "Test ID: $NEXT_TEST_ID"
+echo "Test Name: $TEST_NAME"
+echo "Description: $DESCRIPTION"
+echo "Reason: $REASON"
+if [[ "$HAS_PARENT" =~ ^[Yy]$ ]]; then
+    echo "Parent Test: $PARENT_TEST_NAME (ID: $PARENT_TEST_ID)"
+else
+    echo "Parent Test: None (independent test)"
 fi
 
+read -p "Do you want to proceed with the creation of the test? (y/n): " CONFIRM
+if [[ ! "$CONFIRM" =~ ^[Yy]$ ]]; then
+    echo "Test creation aborted."
+    exit 0
+fi
 
-
-# Use full path for test directory relative to ROOT_DIR
-TEST_PATH="$ROOT_DIR/$TESTS_DIR/$TEST_NAME"
+# Create the test directory
+TEST_PATH="$TESTS_DIR/$TEST_NAME"
+echo "Creating test directory: $TEST_PATH"
 mkdir -p "$TEST_PATH"
 
 # Add a folder in the test directory for subtests called "subtests"
 mkdir -p "$TEST_PATH/subtests"
 
-# Ensure the binary directory exists relative to ROOT_DIR
-mkdir -p "$ROOT_DIR/$BINARIES_DIR"
+# Create the outputs folder
+mkdir -p "$TEST_PATH/outputs"
 
-# Create a dummy binary instead of running the compile script
-echo "Creating a dummy binary for testing..."
-echo "This is a dummy binary for $TEST_NAME" > "$ROOT_DIR/$BINARIES_DIR/$TEST_NAME"
-cp "$ROOT_DIR/$BINARIES_DIR/$TEST_NAME" "$TEST_PATH/"
-echo "Dummy binary created and stored in $TEST_PATH."
+#create the inputs folder
+mkdir -p "$TEST_PATH/inputs"
 
-# Extract the entire dependencies block
-dependencies=$(sed -n '/files:/,/^$/p' "$SETTINGS_FILE" | grep -v 'files:' | grep -v '^$' | grep -v '^ *#')
-echo "Dependencies block extracted: 
-$dependencies"
 
-# Parse dependencies
-declare -a dependency_paths
-while read -r line; do
-  if [[ $line =~ location:\ \"([^\"]*)\" ]]; then
-    location=${BASH_REMATCH[1]}
-  elif [[ $line =~ path:\ \"([^\"]*)\" ]]; then
-    path=${BASH_REMATCH[1]}
-    echo "Processing location: $location, path: $path"
-    case $location in
-      "root_dir")
-        dependency_paths+=("$ROOT_DIR/$path")
-        ;;
-      "croco_dir")
-        dependency_paths+=("$CROCO_DIR_RELATIVE/$path")
-        ;;
-    esac
-  fi
-done <<< "$dependencies"
 
-# Print dependencies
-echo "Resolved dependency paths:"
-for dep in "${dependency_paths[@]}"; do
-  echo "$dep"
-done
 
-# Copy dependencies to the binaries directory
-DEPENDENCIES_DIR="$TEST_PATH/Dependencies"
-mkdir -p "$DEPENDENCIES_DIR"
-for dep in "${dependency_paths[@]}"; do
-  echo "Copying dependency: $dep"
-  cp "$dep" "$DEPENDENCIES_DIR/"
-done
+# Handle inheritance from parent test
+if [[ "$HAS_PARENT" =~ ^[Yy]$ ]]; then
+    echo "Copying dependencies and input files from parent test: $PARENT_TEST_NAME"
+    echo ""
 
-echo "Dependencies copied successfully."
+    # Copy all files and directories from the parent test, excluding the outputs folder
+    rsync -av --exclude='outputs' "$PARENT_TEST_PATH/" "$TEST_PATH/"
+
+    echo ""
+
+    # Update the metadata to reflect the parent test
+    PARENT_METADATA_FILE="$PARENT_TEST_PATH/metadata.yaml"
+    PARENT_DEPENDENCIES=$(yq eval '.dependencies' "$PARENT_METADATA_FILE")
+else
+
+    # Copy base files to the inputs directory
+    echo "Copying base files from $BASE_FILES_DIR to $TEST_PATH/inputs"
+    cp -r "$BASE_FILES_DIR/"* "$TEST_PATH/inputs/"
+
+    # Update paths in the infile.in file
+    INFILE="$TEST_PATH/inputs/infile.in"
+    if [[ -f "$INFILE" ]]; then
+    
+        # Update the test title in the infile.in file
+        echo "Updating test title in $INFILE..."
+    
+        # Replace the placeholder with the actual test name and ID
+        sed -i "s|(To Be Modified by script, should be the same as test title and test number)|$TEST_NAME (ID: $NEXT_TEST_ID)|g" "$INFILE"
+    
+        echo "Test title in $INFILE updated successfully."
+    else
+        echo "Warning: infile.in not found in $TEST_PATH/inputs. Skipping updates."
+    fi
+
+    # Extract the entire dependencies block from settings.yaml
+    dependencies=$(yq eval 'explode(.) | .dependencies' "$SETTINGS_FILE")
+
+    # Use yq to find the dependencies, and copy them to the dependencies directory
+    dependency_dir="$TEST_PATH/dependencies"
+    echo "Copying dependencies to $dependency_dir"
+    mkdir -p "$dependency_dir"
+    dependency_count=$(echo "$dependencies" | yq eval 'length' -)
+
+    for ((i = 0; i < dependency_count; i++)); do
+        dependency_location=$(echo "$dependencies" | yq eval ".[$i].location" -)
+        dependency_path=$(echo "$dependencies" | yq eval ".[$i].path" -)
+
+        full_path="$dependency_location/$dependency_path"
+
+        echo "Copying dependency: $full_path"
+        cp "$full_path" "$dependency_dir"
+    done
+fi
 
 # Create metadata
-cat > "$TEST_PATH/metadata.yaml" <<EOL
+METADATA_FILE="$TEST_PATH/metadata.yaml"
+cat >"$METADATA_FILE" <<EOF
+test_id: $NEXT_TEST_ID
 test_name: $TEST_NAME
-binary_path: $ROOT_DIR/$BINARIES_DIR/$TEST_NAME
-dependencies:
-EOL
+description: $DESCRIPTION
+reason: $REASON
+parent_test_id: $PARENT_TEST_ID
+date: $(date +'%Y-%m-%d %H:%M:%S')
+EOF
 
-# Add dependencies to the metadata
-for dep in "${dependency_paths[@]}"; do
-    echo "  - $dep" >> "$TEST_PATH/metadata.yaml"
-done
+# Append dependencies block to metadata file using yq
+if [[ "$HAS_PARENT" =~ ^[Yy]$ ]]; then
+    echo "$PARENT_DEPENDENCIES" | yq eval '.' - | yq eval '. as $deps | {"dependencies": $deps}' - >>"$METADATA_FILE"
+else
+    echo "$dependencies" | yq eval '.' - | yq eval '. as $deps | {"dependencies": $deps}' - >>"$METADATA_FILE"
+fi
 
-# Add parent test (null in this case since this is a base test)
-echo "parent_test: null" >> "$TEST_PATH/metadata.yaml"
+# Add parent test
+if [[ "$HAS_PARENT" =~ ^[Yy]$ ]]; then
+    echo "parent_test: $PARENT_TEST_NAME" >>"$METADATA_FILE"
+fi
 
-echo "Base test $TEST_NAME created with dependencies tracked."
+echo "Test '$TEST_NAME' created successfully."
