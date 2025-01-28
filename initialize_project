@@ -70,6 +70,11 @@ echo "Updating jobcomp script..."
 sed -i "s|^SOURCE=.*|SOURCE=$CROCO_DIR/OCEAN|" "$COMPILE_SCRIPT"
 echo "jobcomp script updated."
 
+# Make the script executable
+chmod +x "$COMPILE_SCRIPT"
+echo "jobcomp script is now executable."
+
+
 # Create or overwrite settings.yaml
 echo "Creating settings.yaml..."
 cat > "$SETTINGS_FILE" <<EOL
