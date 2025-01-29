@@ -15,10 +15,22 @@ get_root_dir() {
     fi
 }
 
-# Function to get the next test ID
+get_script_dir() {
+    # Resolve the source path of the script
+    SOURCE="${BASH_SOURCE[0]}"
+    while [ -h "$SOURCE" ]; do # Follow symbolic links
+        DIR="$(cd -P "$(dirname "$SOURCE")" && pwd)"
+        SOURCE="$(readlink "$SOURCE")"
+        [[ $SOURCE != /* ]] && SOURCE="$DIR/$SOURCE" # If the link is relative, resolve it
+    done
+    DIR="$(cd -P "$(dirname "$SOURCE")" && pwd)"
+    echo "$DIR"
+}
+
+
 get_next_test_id() {
     local TESTS_DIR="$1"
-    local LAST_TEST_ID=$(find "$TESTS_DIR" -name "metadata.yaml" -exec yq eval '.test_id' {} \; | sort -n | tail -1)
+    local LAST_TEST_ID=$(find "$TESTS_DIR" -name "metadata.yaml" -exec yq eval '.test_id' {} \; | grep -E '^[0-9]+$' | sort -n | tail -1)
     if [[ -z "$LAST_TEST_ID" ]]; then
         echo "1"
     else
@@ -38,6 +50,55 @@ list_tests() {
     done
 }
 
+get_resolution_configuration() {
+    # Prompt user for input with options included
+    read -p "
+Choose from the following resolutions:
+1. Lowres
+2. Medres
+3. Hires
+Enter the resolution configuration (1-3): " RESOLUTION
+
+    # Validate the user's input
+    case $RESOLUTION in
+        1)
+            echo "lowres"
+            ;;
+        2)
+            echo "medres"
+            ;;
+        3)
+            echo "hires"
+            ;;
+        *)
+            echo "Invalid selection. Please choose a number between 1 and 3."
+            return 1
+            ;;
+    esac
+}
+
+
+
+
+copy_resolution_config() {
+    local RESOLUTION=$1
+    local TEST_PATH=$2
+    local SCRIPT_DIR=$(get_script_dir)
+    local CONFIG_FILE="$SCRIPT_DIR/configs/resolutions/$RESOLUTION/param.h"
+
+    
+    if [[ -f "$CONFIG_FILE" ]]; then
+        cp "$CONFIG_FILE" "$TEST_PATH/"
+        echo "Copied $RESOLUTION configuration file to $TEST_PATH"
+    else
+        echo "Warning: Resolution configuration file not found at $CONFIG_FILE"
+    fi
+}
+
+
+
+
+
 # Get the root directory
 ROOT_DIR=$(get_root_dir)
 
@@ -46,39 +107,50 @@ SETTINGS_FILE="$ROOT_DIR/settings.yaml"
 TESTS_DIR="$ROOT_DIR/$(yq eval '.project.tests_dir' "$SETTINGS_FILE")"
 BINARIES_DIR="$ROOT_DIR/$(yq eval '.project.binaries_dir' "$SETTINGS_FILE")"
 CROCO_DIR=$(yq eval '.project.croco_dir' "$SETTINGS_FILE")
-BASE_FILES_DIR="$ROOT_DIR/$(yq eval '.project.base_files_dir' "$SETTINGS_FILE")"
+BASE_INPUTS_DIR="$ROOT_DIR/$(yq eval '.project.base_inputs_dir' "$SETTINGS_FILE")"
 
+echo ""
 echo "ROOT_DIR=$ROOT_DIR"
 echo "TESTS_DIR=$TESTS_DIR"
 echo "BINARIES_DIR=$BINARIES_DIR"
 echo "CROCO_DIR=$CROCO_DIR"
-echo "BASE_FILES_DIR=$BASE_FILES_DIR"
+echo "BASE_INPUTS_DIR=$BASE_INPUTS_DIR"
+echo ""
+
 
 
 # Get the next test ID
 NEXT_TEST_ID=$(get_next_test_id "$TESTS_DIR")
 
 echo "NEXT_TEST_ID=$NEXT_TEST_ID"
+echo ""
 
 # Prompt for a descriptive suffix
-read -p "Enter a short description of the test (e.g., HighDiffusivity_Bio): " DESCRIPTION
+read -p "
+Enter a short description of the test (e.g., HighDiffusivity_Bio): " DESCRIPTION
 if [[ -z "$DESCRIPTION" ]]; then
     echo "Error: Description cannot be empty."
     exit 1
 fi
 
 # Prompt for the reason for creating the test
-read -p "Enter the reason for creating this test: " REASON
+read -p "
+Enter the reason for creating this test: " REASON
 if [[ -z "$REASON" ]]; then
     echo "Error: Reason cannot be empty."
     exit 1
 fi
 
+# Promp for the resolution configuration
+resolution=$(get_resolution_configuration)
+
 # Ask if the test is based on a previous test
-read -p "Is this test based on a previous test? (y/n): " HAS_PARENT
+read -p "
+Is this test based on a previous test? (y/n): " HAS_PARENT
 if [[ "$HAS_PARENT" =~ ^[Yy]$ ]]; then
     list_tests "$TESTS_DIR"
-    read -p "Enter the ID of the parent test: " PARENT_TEST_ID
+    read -p "
+    Enter the ID of the parent test: " PARENT_TEST_ID
 
     # Validate parent test ID
     PARENT_TEST_PATH=$(find "$TESTS_DIR" -name "metadata.yaml" -exec grep -l "test_id: $PARENT_TEST_ID" {} + | xargs dirname)
@@ -115,7 +187,8 @@ else
     echo "Parent Test: None (independent test)"
 fi
 
-read -p "Do you want to proceed with the creation of the test? (y/n): " CONFIRM
+read -p "
+Do you want to proceed with the creation of the test? (y/n): " CONFIRM
 if [[ ! "$CONFIRM" =~ ^[Yy]$ ]]; then
     echo "Test creation aborted."
     exit 0
@@ -134,6 +207,9 @@ mkdir -p "$TEST_PATH/outputs"
 
 #create the inputs folder
 mkdir -p "$TEST_PATH/inputs"
+
+# Copy the resolution configuration file to the test directory
+copy_resolution_config "$resolution" "$TEST_PATH"
 
 
 
@@ -154,8 +230,8 @@ if [[ "$HAS_PARENT" =~ ^[Yy]$ ]]; then
 else
 
     # Copy base files to the inputs directory
-    echo "Copying base files from $BASE_FILES_DIR to $TEST_PATH/inputs"
-    cp -r "$BASE_FILES_DIR/"* "$TEST_PATH/inputs/"
+    echo "Copying base inputs from $BASE_INPUTS_DIR to $TEST_PATH/inputs"
+    cp -r "$BASE_INPUTS_DIR/"* "$TEST_PATH/inputs/"
 
     # Update paths in the infile.in file
     INFILE="$TEST_PATH/inputs/infile.in"
@@ -216,3 +292,21 @@ if [[ "$HAS_PARENT" =~ ^[Yy]$ ]]; then
 fi
 
 echo "Test '$TEST_NAME' created successfully."
+
+# # Ask if the user wants to create the 3-subtest structure
+# read -p "
+# Do you want to create the standard 3-subtest structure (Control, EHDA, EHDB)? (y/n): " CREATE_SUBTESTS
+# if [[ "$CREATE_SUBTESTS" =~ ^[Yy]$ ]]; then
+#     # Ensure the add_diffusion_subtests.sh script exists
+#     ADD_SUBTESTS_SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+#     ADD_SUBTESTS_SCRIPT="$ADD_SUBTESTS_SCRIPT_DIR/add_diffusion_subtests"
+#     if [[ -f "$ADD_SUBTESTS_SCRIPT" ]]; then
+#         echo "Creating standard 3-subtest structure..."
+#         #cd to the test directory
+#         cd "$TEST_PATH"
+#         # Run the subtest script
+#         bash "$ADD_SUBTESTS_SCRIPT" || error_exit "Failed to create subtests."
+#     else
+#         echo "add_diffusion_subtests script not found at $ADD_SUBTESTS_SCRIPT. Subtests will not be created."
+#     fi
+# fi

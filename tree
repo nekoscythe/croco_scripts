@@ -25,7 +25,7 @@ build_test_tree() {
     local METADATA_FILE="$DIR/metadata.yaml"
     if [[ -f "$METADATA_FILE" ]]; then
         local TEST_ID=$(yq eval '.test_id' "$METADATA_FILE")
-        local TEST_NAME=$(yq eval '.description' "$METADATA_FILE")
+        local TEST_NAME=$(yq eval '.test_name' "$METADATA_FILE")
     else
         return
     fi
