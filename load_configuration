@@ -160,15 +160,23 @@ fi
 
 
 # --- Source Directories and Files ---
-RESOLUTION_PARAM_H_SRC="$RESOLUTIONS_DIR/$RESOLUTION/param.h"
-CPPDEFS_H_SRC="$BIOLOGY_PHYSICS_FULL_DIR/$CPPDEFS_FILE"
-INITIAL_RST_SRC="$INITIAL_CONDITIONS_DIR/$INITIAL_CONFIG_NAME/$RESOLUTION/input_rst.nc"
-DIFFUSION_T3DMIX_SRC="$DIFFUSION_DIR/$DIFFUSION_VERSION/t3dmix_S.F"
-INPUT_FRC_SRC="$INPUTS_CONFIG_DIR/$RESOLUTION/input_frc.nc"
-INPUT_GRD_SRC="$INPUTS_CONFIG_DIR/$RESOLUTION/input_grd.nc"
-BASE_INFILE_IN_SRC="$BASE_FILES_DIR/infile.in"
-BASE_JOBCOMP_SRC="$BASE_FILES_DIR/jobcomp"
-BASE_CPPDEFS_DEV_H_SRC="$BASE_FILES_DIR/cppdefs_dev.h"
+# Function to get file path from manifest
+get_file_path() {
+    local file_name="$1"
+    yq eval ".files[] | select(.src == \"$file_name\") | .src" "$MANIFEST_FILE"
+}
+
+# Get file paths from manifest
+PARAM_H_FILE=$(get_file_path "param.h")
+CPPDEFS_DEV_H_FILE=$(get_file_path "cppdefs_dev.h")
+INFILE_IN_FILE=$(get_file_path "infile.in")
+JOBCOMP_FILE=$(get_file_path "jobcomp")
+
+# Construct full paths
+PARAM_H_SRC="$RESOLUTIONS_DIR/$RESOLUTION/$PARAM_H_FILE"
+CPPDEFS_DEV_H_SRC="$BASE_FILES_DIR/$CPPDEFS_DEV_H_FILE"
+INFILE_IN_SRC="$BASE_FILES_DIR/$INFILE_IN_FILE"
+JOBCOMP_SRC="$BASE_FILES_DIR/$JOBCOMP_FILE"
 
 
 # --- File Copying ---
@@ -181,16 +189,16 @@ copy_config_files() {
   echo -e "\n--- Copying Configuration Files ---"
 
   # 1. Copy param.h
-  local param_h_source="${RESOLUTIONS_DIR}/${resolution}/param.h"
+  local param_h_source="${RESOLUTIONS_DIR}/${resolution}/${PARAM_H_FILE}"
   local param_h_dest="./param.h"
 
   # --- DEBUGGING ---
   echo "DEBUG: RESOLUTION value: '$resolution'"
-  echo "DEBUG: Constructed RESOLUTION_PARAM_H_SRC: '$RESOLUTION_PARAM_H_SRC'"
+  echo "DEBUG: Constructed param_h_source: '$param_h_source'"
   # --- DEBUGGING ---
 
-  if [[ ! -f "$RESOLUTION_PARAM_H_SRC" ]]; then
-    echo "Error: $RESOLUTION_PARAM_H_SRC not found."
+  if [[ ! -f "$param_h_source" ]]; then
+    echo "Error: $param_h_source not found."
     return 1
   fi
   echo "Copying: ${param_h_source} -> ${param_h_dest}"
@@ -317,11 +325,17 @@ fi
 
 # --- Update metadata.yaml ---
 
+# --- Update metadata.yaml ---
+
 echo "Updating metadata.yaml..."
 echo "resolution: $RESOLUTION" >> metadata.yaml
 echo "cppdefs_type: $BIOLOGY_PHYSICS" >> metadata.yaml
 echo "initial_condition_config: $INITIAL_CONFIG_NAME" >> metadata.yaml
 echo "diffusion_config: $DIFFUSION_VERSION" >> metadata.yaml
+echo "param_h_file: $PARAM_H_FILE" >> metadata.yaml
+echo "cppdefs_dev_h_file: $CPPDEFS_DEV_H_FILE" >> metadata.yaml
+echo "infile_in_file: $INFILE_IN_FILE" >> metadata.yaml
+echo "jobcomp_file: $JOBCOMP_FILE" >> metadata.yaml
 
 
 echo "Scenario configuration loaded successfully"
