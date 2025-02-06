@@ -67,7 +67,7 @@ fi
 PROJECT_ROOT=$(get_project_root)
 
 # Define the config map file path
-CONFIG_MAP_FILE="$PROJECT_ROOT/Configs/config_map.yaml"
+CONFIG_MAP_FILE="$(dirname "$0")/Configs/config_map.yaml"
 
 # Copy files based on the config map
 copy_files_from_config "$CONFIG_MAP_FILE"
