@@ -14,7 +14,7 @@ CONFIG_DIR="$SCRIPT_DIR/Configs"
 CONFIG_MAP="$CONFIG_DIR/config_map.yaml"
 
 FILE_TYPES=$(yq e '.FileTypes | keys | .[]' "$CONFIG_MAP")
-echo "File types: $FILE_TYPES"
+# echo "File types: $FILE_TYPES"
 
 # Function to prompt user for configuration options
 prompt_config() {
@@ -68,3 +68,7 @@ prompt_config() {
     echo "Initial Condition Config: $init_config"
     echo "Diffusion: $diffusion"
 }
+
+
+# execute the prompt_config function
+prompt_config
