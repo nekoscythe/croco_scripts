@@ -16,10 +16,55 @@ CONFIG_MAP="$CONFIG_DIR/config_map.yaml"
 FILE_TYPES=$(yq e '.FileTypes | keys | .[]' "$CONFIG_MAP")
 echo "File types: $FILE_TYPES"
 
-# AI
-# write a function to prompt the user for the 4 options:
-# 1. Resolution
-# 2. Bio or Physics
-# 3. Init Config
-# 4. Diffusion Settings
-# AI!
+# Function to prompt user for configuration options
+prompt_config() {
+    local resolution
+    local bio_physics
+    local init_config
+    local diffusion
+
+    # Prompt for resolution
+    select resolution in "${!Resolutions[@]}"; do
+        if [[ -n "$resolution" ]]; then
+            echo "Selected resolution: $resolution"
+            break
+        else
+            echo "Invalid selection. Please try again."
+        fi
+    done
+
+    # Prompt for Bio or Physics
+    select bio_physics in "biology" "physics"; do
+        if [[ -n "$bio_physics" ]]; then
+            echo "Selected Bio/Physics: $bio_physics"
+            break
+        else
+            echo "Invalid selection. Please try again."
+        fi
+    done
+
+    # Prompt for Initial Condition Config
+    select init_config in "${!InitialConditions[@]}"; do
+        if [[ -n "$init_config" ]]; then
+            echo "Selected Initial Condition Config: $init_config"
+            break
+        else
+            echo "Invalid selection. Please try again."
+        fi
+    done
+
+    # Prompt for Diffusion Settings
+    select diffusion in "${!Diffusion[@]}"; do
+        if [[ -n "$diffusion" ]]; then
+            echo "Selected Diffusion: $diffusion"
+            break
+        else
+            echo "Invalid selection. Please try again."
+        fi
+    done
+
+    echo "Resolution: $resolution"
+    echo "Bio/Physics: $bio_physics"
+    echo "Initial Condition Config: $init_config"
+    echo "Diffusion: $diffusion"
+}
