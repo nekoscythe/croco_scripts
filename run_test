@@ -71,7 +71,7 @@ read -p "Enter the number of cores to use (1-$AVAILABLE_CORES): " NUM_CORES
 # Validate the number of cores
 if [[ ! "$NUM_CORES" =~ ^[0-9]+$ ]] || (( NUM_CORES < 1 )) || (( NUM_CORES > AVAILABLE_CORES )); then
     echo "Error: Invalid number of cores. Please enter a number between 1 and $AVAILABLE_CORES."
-    exit 1
+    # exit 1
 fi
 
 # Set the number of threads for OpenMP (or similar parallel frameworks)

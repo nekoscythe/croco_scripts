@@ -1,0 +1,63 @@
+#!/bin/bash
+
+# Function to get the project root directory
+get_project_root() {
+    local dir=$(pwd)
+    while [[ ! -d "$dir/Tests" && "$dir" != "/" ]]; do
+        dir=$(dirname "$dir")
+    done
+    echo "$dir"
+}
+
+# Check if we're in a test directory
+if [[ ! -f "metadata.yaml" ]]; then
+    echo "Error: This script must be run from a test directory containing metadata.yaml"
+    exit 1
+fi
+
+# Get project root and InitConfigs directory
+PROJECT_ROOT=$(get_project_root)
+INIT_CONFIGS_DIR=$(dirname "$PROJECT_ROOT")/InitConfigs
+METADATA_FILE="metadata.yaml"
+
+# List available configurations
+echo "Available configurations:"
+ls "$INIT_CONFIGS_DIR"
+
+# Prompt for configuration choice
+read -p "Enter the configuration name: " CONFIG_NAME
+
+# Check if the chosen configuration exists
+if [[ ! -d "$INIT_CONFIGS_DIR/$CONFIG_NAME" ]]; then
+    echo "Error: Configuration '$CONFIG_NAME' not found"
+    exit 1
+fi
+
+# Prompt for resolution
+read -p "Enter resolution (lowres/medres/highres): " RESOLUTION
+
+# Check if the chosen resolution exists
+if [[ ! -d "$INIT_CONFIGS_DIR/$CONFIG_NAME/$RESOLUTION" ]]; then
+    echo "Error: Resolution '$RESOLUTION' not found for configuration '$CONFIG_NAME'"
+    exit 1
+fi
+
+
+
+# Copy files from chosen configuration to test inputs
+SOURCE_DIR="$INIT_CONFIGS_DIR/$CONFIG_NAME/$RESOLUTION"
+DEST_DIR="inputs"
+
+# Check if there are files in the resolution folder
+if [[ ! "$(ls -A "$SOURCE_DIR")" ]]; then
+    echo "Error: No files found in $CONFIG_NAME/$RESOLUTION"
+    exit 1
+fi
+
+echo "Copying files from $SOURCE_DIR to $DEST_DIR"
+cp -r "$SOURCE_DIR"/* "$DEST_DIR/"
+
+#add the configuration to metadata.yaml
+echo "configuration: $CONFIG_NAME" >> metadata.yaml
+
+echo "Configuration loaded successfully"
