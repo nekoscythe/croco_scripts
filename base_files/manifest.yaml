@@ -3,7 +3,3 @@ files:
       dest: "base_inputs"  # Root directory
     - src: "jobcomp"
       dest: "."
-    - src: "cppdefs.h"
-      dest: "."
-    - src: "cppdefs_dev.h"
-      dest: "."
