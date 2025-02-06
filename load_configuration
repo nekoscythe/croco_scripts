@@ -200,18 +200,25 @@ copy_config_files() {
   fi
 
   # 2. Copy cppdefs.h
-  local cppdefs_h_filename="cppdefs_${cppdefs_type}.h"
-  local cppdefs_h_source="${CPPDEFS_DIR}/${cppdefs_h_filename}"
+  if [[ "$BIOLOGY_PHYSICS" == "biology" ]]; then
+    local cppdefs_h_source="${BASE_FILES_DIR}/Biology/$CPPDEFS_FILE"
+  else
+    local cppdefs_h_source="${BASE_FILES_DIR}/Physics/$CPPDEFS_FILE"
+  fi
   local cppdefs_h_dest="./cppdefs.h"
 
   # 3. Copy initial condition configuration files
-  local initial_config_source_dir="${INITIAL_CONDITIONS_DIR}/${initial_condition_config}"
+  # 3. Copy initial condition configuration files
+  local initial_rst_src="${INITIAL_CONDITIONS_DIR}/${INITIAL_CONFIG_NAME}/${RESOLUTION}/input_rst.nc"
+
   # 4. Diffusion t3dmix_S.F
-  local diffusion_t3dmix_src="${DIFFUSION_DIR}/${diffusion_version}/t3dmix_S.F"
+  local diffusion_t3dmix_src="${DIFFUSION_DIR}/${DIFFUSION_VERSION}/t3dmix_S.F"
+
   # 5. Input forcing input_frc.nc
-  local input_frc_src="${INPUTS_CONFIG_DIR}/${resolution}/input_frc.nc"
+  local input_frc_src="${INPUTS_CONFIG_DIR}/${RESOLUTION}/input_frc.nc"
+
   # 6. Input grid input_grd.nc
-  local input_grd_src="${INPUTS_CONFIG_DIR}/${resolution}/input_grd.nc"
+  local input_grd_src="${INPUTS_CONFIG_DIR}/${RESOLUTION}/input_grd.nc"
   # 7. Base infile.in
   local base_infile_in_src="${BASE_FILES_DIR}/infile.in"
   # 8. Base jobcomp
