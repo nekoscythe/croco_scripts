@@ -9,4 +9,4 @@ get_project_root() {
     echo "$dir"
 }
 
-# determine the script's directory AI!
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
