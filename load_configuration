@@ -9,55 +9,312 @@ get_project_root() {
     echo "$dir"
 }
 
+# Function to list options from a directory and prompt for choice
+list_options_and_prompt() {
+    local dir="$1"
+    local prompt_message="$2"
+    local option_type="$3" # e.g., "resolution", "config", "diffusion"
+    local -a options=()
+
+    if [[ ! -d "$dir" ]]; then
+        echo "Error: Directory '$dir' not found for $option_type options."
+        return 1
+    fi
+
+    options=($(find "$dir" -maxdepth 1 -mindepth 1 -type d -printf '%f\n')) # Get directory names only
+
+    if [[ ${#options[@]} -eq 0 ]]; then
+        echo "Error: No $option_type options found in '$dir'."
+        return 1
+    fi
+
+    echo "Available $option_type options:"
+    local chosen_option_var=$(
+        select chosen_option in "${options[@]}"; do
+            if [[ -n "$chosen_option" ]]; then
+                echo "$chosen_option" # Output the chosen option to stdout of select
+                break # Exit select loop after valid choice
+            else
+                echo "Invalid selection."
+            fi
+        done
+    )
+    echo "$chosen_option_var" # Output the captured variable
+}
+
+# Function to list file options from a directory and prompt for choice
+list_file_options_and_prompt() {
+    local dir="$1"
+    local prompt_message="$2"
+    local option_type="$3" # e.g., "cppdefs"
+    local -a options=()
+
+    if [[ ! -d "$dir" ]]; then
+        echo "Error: Directory '$dir' not found for $option_type files."
+        return 1
+    fi
+
+    options=($(find "$dir" -maxdepth 1 -mindepth 1 -type f -printf '%f\n')) # Get file names only
+
+    if [[ ${#options[@]} -eq 0 ]]; then
+        echo "Error: No $option_type files found in '$dir'."
+        return 1
+    fi
+
+    echo "Available $option_type files:"
+    local chosen_option_var=$(
+        select chosen_option in "${options[@]}"; do
+            if [[ -n "$chosen_option" ]]; then
+                echo "$chosen_option" # Output the chosen option to stdout of select
+                break # Exit select loop after valid choice
+            else
+                echo "Invalid selection."
+            fi
+        done
+    )
+    echo "$chosen_option_var" # Output the captured variable
+}
+
+
 # Check if we're in a test directory
 if [[ ! -f "metadata.yaml" ]]; then
     echo "Error: This script must be run from a test directory containing metadata.yaml"
     exit 1
 fi
 
-# Get project root and InitConfigs directory
+# Get project root and Configs directory
 PROJECT_ROOT=$(get_project_root)
-INIT_CONFIGS_DIR=$(dirname "$PROJECT_ROOT")/InitConfigs
-METADATA_FILE="metadata.yaml"
+CONFIGS_DIR="$PROJECT_ROOT/Configs"
+RESOLUTIONS_DIR="$CONFIGS_DIR/Resolutions"
+BASE_FILES_DIR="$CONFIGS_DIR/BaseFiles"
+INITIAL_CONDITIONS_DIR="$CONFIGS_DIR/InitialConditions"
+DIFFUSION_DIR="$CONFIGS_DIR/Diffusion"
+INPUTS_CONFIG_DIR="$CONFIGS_DIR/Inputs" # For input_frc.nc and input_grd.nc
+DEPENDENCIES_DIR="dependencies"
+INPUTS_DEST_DIR="inputs"
+TEST_ROOT_DIR="." # Current test directory as destination root
 
-# List available configurations
-echo "Available configurations:"
-ls "$INIT_CONFIGS_DIR"
+# --- Option Selection Prompts ---
 
-# Prompt for configuration choice
-read -p "Enter the configuration name: " CONFIG_NAME
-
-# Check if the chosen configuration exists
-if [[ ! -d "$INIT_CONFIGS_DIR/$CONFIG_NAME" ]]; then
-    echo "Error: Configuration '$CONFIG_NAME' not found"
+# 1. Resolution
+echo "--- Resolution ---"
+# --- DEBUGGING LINES START ---
+echo "DEBUG: PROJECT_ROOT=$(get_project_root)"
+echo "DEBUG: CONFIGS_DIR=$CONFIGS_DIR"
+echo "DEBUG: RESOLUTIONS_DIR=$RESOLUTIONS_DIR"
+# --- DEBUGGING LINES END ---
+RESOLUTION=$(list_options_and_prompt "$RESOLUTIONS_DIR" "Enter resolution (choose from list): " "resolution")
+if [[ -z "$RESOLUTION" ]]; then
+    echo "Error: Resolution not selected."
     exit 1
 fi
 
-# Prompt for resolution
-read -p "Enter resolution (lowres/medres/highres): " RESOLUTION
+# 2. Biology or Physics cppdefs.h
+echo "\n--- Biology or Physics cppdefs.h ---"
+BIOLOGY_PHYSICS_DIR=""
+BIOLOGY_PHYSICS=""
+CPPDEFS_FILE=""
+while true; do
+    read -p "Choose cppdefs.h type (biology/physics): " BIOLOGY_PHYSICS_CHOICE
+    case "$BIOLOGY_PHYSICS_CHOICE" in
+        biology|Biology)
+            BIOLOGY_PHYSICS_DIR="$BASE_FILES_DIR/Biology"
+            BIOLOGY_PHYSICS="biology"
+            break
+            ;;
+        physics|Physics)
+            BIOLOGY_PHYSICS_DIR="$BASE_FILES_DIR/Physics"
+            BIOLOGY_PHYSICS="physics"
+            break
+            ;;
+        *)
+            echo "Invalid choice. Please enter 'biology' or 'physics'."
+            ;;
+    esac
+done
+BIOLOGY_PHYSICS_FULL_DIR="$BIOLOGY_PHYSICS_DIR"
 
-# Check if the chosen resolution exists
-if [[ ! -d "$INIT_CONFIGS_DIR/$CONFIG_NAME/$RESOLUTION" ]]; then
-    echo "Error: Resolution '$RESOLUTION' not found for configuration '$CONFIG_NAME'"
+echo "\n--- Choose cppdefs.h file ---"
+CPPDEFS_FILE=$(list_file_options_and_prompt "$BIOLOGY_PHYSICS_FULL_DIR" "Choose cppdefs.h file from $(basename "$BIOLOGY_PHYSICS_FULL_DIR"): " "cppdefs.h file")
+if [[ -z "$CPPDEFS_FILE" ]]; then
+    echo "Error: cppdefs.h file not selected."
     exit 1
 fi
 
 
-
-# Copy files from chosen configuration to test inputs
-SOURCE_DIR="$INIT_CONFIGS_DIR/$CONFIG_NAME/$RESOLUTION"
-DEST_DIR="inputs"
-
-# Check if there are files in the resolution folder
-if [[ ! "$(ls -A "$SOURCE_DIR")" ]]; then
-    echo "Error: No files found in $CONFIG_NAME/$RESOLUTION"
+# 3. Initial Condition Configuration Name
+echo "\n--- Initial Condition Configuration ---"
+INITIAL_CONFIG_NAME=$(list_options_and_prompt "$INITIAL_CONDITIONS_DIR" "Enter initial condition configuration name (choose from list): " "initial condition configuration")
+if [[ -z "$INITIAL_CONFIG_NAME" ]]; then
+    echo "Error: Initial condition configuration not selected."
     exit 1
 fi
 
-echo "Copying files from $SOURCE_DIR to $DEST_DIR"
-cp -r "$SOURCE_DIR"/* "$DEST_DIR/"
+# 4. Diffusion Version
+echo "\n--- Diffusion Version ---"
+DIFFUSION_VERSION=$(list_options_and_prompt "$DIFFUSION_DIR" "Enter diffusion version (choose from list): " "diffusion version")
+if [[ -z "$DIFFUSION_VERSION" ]]; then
+    echo "Error: Diffusion version not selected."
+    exit 1
+fi
 
-#add the configuration to metadata.yaml
-echo "configuration: $CONFIG_NAME" >> metadata.yaml
 
-echo "Configuration loaded successfully"
+# --- Source Directories and Files ---
+RESOLUTION_PARAM_H_SRC="$RESOLUTIONS_DIR/$RESOLUTION/param.h"
+CPPDEFS_H_SRC="$BIOLOGY_PHYSICS_FULL_DIR/$CPPDEFS_FILE"
+INITIAL_RST_SRC="$INITIAL_CONDITIONS_DIR/$INITIAL_CONFIG_NAME/$RESOLUTION/input_rst.nc"
+DIFFUSION_T3DMIX_SRC="$DIFFUSION_DIR/$DIFFUSION_VERSION/t3dmix_S.F"
+INPUT_FRC_SRC="$INPUTS_CONFIG_DIR/$RESOLUTION/input_frc.nc"
+INPUT_GRD_SRC="$INPUTS_CONFIG_DIR/$RESOLUTION/input_grd.nc"
+BASE_INFILE_IN_SRC="$BASE_FILES_DIR/infile.in"
+BASE_JOBCOMP_SRC="$BASE_FILES_DIR/jobcomp"
+BASE_CPPDEFS_DEV_H_SRC="$BASE_FILES_DIR/cppdefs_dev.h"
+
+
+# --- File Copying ---
+copy_config_files() {
+  local resolution="$1"
+  local cppdefs_type="$2"
+  local initial_condition_config="$3"
+  local diffusion_version="$4"
+
+  echo -e "\n--- Copying Configuration Files ---"
+
+  # 1. Copy param.h
+  local param_h_source="${RESOLUTIONS_DIR}/${resolution}/param.h"
+  local param_h_dest="./param.h"
+
+  # --- DEBUGGING ---
+  echo "DEBUG: RESOLUTION value: '$resolution'"
+  echo "DEBUG: Constructed RESOLUTION_PARAM_H_SRC: '$RESOLUTION_PARAM_H_SRC'"
+  # --- DEBUGGING ---
+
+  if [[ ! -f "$RESOLUTION_PARAM_H_SRC" ]]; then
+    echo "Error: $RESOLUTION_PARAM_H_SRC not found."
+    return 1
+  fi
+  echo "Copying: ${param_h_source} -> ${param_h_dest}"
+  if ! cp -v "${param_h_source}" "${param_h_dest}"; then
+    echo "Error copying ${param_h_source} to ${param_h_dest}"
+    return 1
+  fi
+
+  # 2. Copy cppdefs.h
+  local cppdefs_h_filename="cppdefs_${cppdefs_type}.h"
+  local cppdefs_h_source="${CPPDEFS_DIR}/${cppdefs_h_filename}"
+  local cppdefs_h_dest="./cppdefs.h"
+
+  # 3. Copy initial condition configuration files
+  local initial_config_source_dir="${INITIAL_CONDITIONS_DIR}/${initial_condition_config}"
+  # 4. Diffusion t3dmix_S.F
+  local diffusion_t3dmix_src="${DIFFUSION_DIR}/${diffusion_version}/t3dmix_S.F"
+  # 5. Input forcing input_frc.nc
+  local input_frc_src="${INPUTS_CONFIG_DIR}/${resolution}/input_frc.nc"
+  # 6. Input grid input_grd.nc
+  local input_grd_src="${INPUTS_CONFIG_DIR}/${resolution}/input_grd.nc"
+  # 7. Base infile.in
+  local base_infile_in_src="${BASE_FILES_DIR}/infile.in"
+  # 8. Base jobcomp
+  local base_jobcomp_src="${BASE_FILES_DIR}/jobcomp"
+  # 9. Base cppdefs_dev.h
+  local base_cppdefs_dev_h_src="${BASE_FILES_DIR}/cppdefs_dev.h"
+
+
+  # cppdefs.h (Biology or Physics)
+  if [[ -f "$cppdefs_h_source" ]]; then
+      echo "Copying $cppdefs_h_source to $TEST_ROOT_DIR"
+      cp -v "$cppdefs_h_source" "$TEST_ROOT_DIR/"
+  else
+      echo "Error: $cppdefs_h_source not found."
+      return 1
+  fi
+
+  # Initial conditions input_rst.nc
+  local initial_rst_src="${INITIAL_CONDITIONS_DIR}/${initial_condition_config}/${resolution}/input_rst.nc"
+  if [[ -f "$initial_rst_src" ]]; then
+      echo "Copying $initial_rst_src to $INPUTS_DEST_DIR"
+      mkdir -p "$INPUTS_DEST_DIR"
+      cp -v "$initial_rst_src" "$INPUTS_DEST_DIR/"
+  else
+      echo "Warning: $initial_rst_src not found. Skipping."
+  fi
+
+  # Diffusion t3dmix_S.F
+  if [[ -f "$diffusion_t3dmix_src" ]]; then
+      echo "Copying $diffusion_t3dmix_src to $DEPENDENCIES_DIR"
+      mkdir -p "$DEPENDENCIES_DIR"
+      cp -v "$diffusion_t3dmix_src" "$DEPENDENCIES_DIR/"
+  else
+      echo "Error: $diffusion_t3dmix_src not found."
+      return 1
+  fi
+
+  # Input forcing input_frc.nc
+  if [[ -f "$input_frc_src" ]]; then
+      echo "Copying $input_frc_src to $INPUTS_DEST_DIR"
+      mkdir -p "$INPUTS_DEST_DIR"
+      cp -v "$input_frc_src" "$INPUTS_DEST_DIR/"
+  else
+      echo "Warning: $input_frc_src not found. Skipping."
+  fi
+
+  # Input grid input_grd.nc
+  if [[ -f "$input_grd_src" ]]; then
+      echo "Copying $input_grd_src to $INPUTS_DEST_DIR"
+      mkdir -p "$INPUTS_DEST_DIR"
+      cp -v "$input_grd_src" "$INPUTS_DEST_DIR/"
+  else
+      echo "Warning: $input_grd_src not found. Skipping."
+  fi
+
+  # Base infile.in
+  if [[ -f "$base_infile_in_src" ]]; then
+      echo "Copying $base_infile_in_src to $INPUTS_DEST_DIR"
+      mkdir -p "$INPUTS_DEST_DIR"
+      cp -v "$base_infile_in_src" "$INPUTS_DEST_DIR/"
+  else
+      echo "Error: $base_infile_in_src not found."
+      exit 1
+  fi
+
+  # Base jobcomp
+  if [[ -f "$base_jobcomp_src" ]]; then
+      echo "Copying $base_jobcomp_src to $TEST_ROOT_DIR"
+      cp -v "$base_jobcomp_src" "$TEST_ROOT_DIR/"
+      chmod +x "$TEST_ROOT_DIR/jobcomp" # Make jobcomp executable
+  else
+      echo "Error: $base_jobcomp_src not found."
+      exit 1
+  fi
+
+  # Base cppdefs_dev.h
+  if [[ -f "$base_cppdefs_dev_h_src" ]]; then
+      echo "Copying $base_cppdefs_dev_h_src to $TEST_ROOT_DIR"
+      cp -v "$base_cppdefs_dev_h_src" "$TEST_ROOT_DIR/"
+  else
+      echo "Warning: $base_cppdefs_dev_h_src not found. Skipping."
+  fi
+
+
+  echo -e "\nConfiguration files copied successfully!"
+  return 0
+}
+
+
+echo "Copying configuration files..."
+if ! copy_config_files "$RESOLUTION" "$BIOLOGY_PHYSICS" "$INITIAL_CONFIG_NAME" "$DIFFUSION_VERSION"; then
+    echo -e "\nConfiguration process failed. See error messages above."
+    exit 1
+fi
+
+
+# --- Update metadata.yaml ---
+
+echo "Updating metadata.yaml..."
+echo "resolution: $RESOLUTION" >> metadata.yaml
+echo "cppdefs_type: $BIOLOGY_PHYSICS" >> metadata.yaml
+echo "initial_condition_config: $INITIAL_CONFIG_NAME" >> metadata.yaml
+echo "diffusion_config: $DIFFUSION_VERSION" >> metadata.yaml
+
+
+echo "Scenario configuration loaded successfully"
