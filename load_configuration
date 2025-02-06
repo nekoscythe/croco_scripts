@@ -10,3 +10,7 @@ get_project_root() {
 }
 
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+CONFIG_DIR="$SCRIPT_DIR/Configs"
+CONFIG_MAP="$CONFIG_DIR/config_map.yaml"
+
+# get all the file types in the CONFIG_MAP AI!
