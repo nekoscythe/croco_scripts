@@ -107,17 +107,8 @@ get_file_paths() {
   local infile_src=$(yq e ".BaseFiles.infile" "$CONFIG_FILE" 2>/dev/null)
   local jobcomp_src=$(yq e ".BaseFiles.jobcomp" "$CONFIG_FILE" 2>/dev/null)
 
-  # Print the selected file paths
-  echo "Selected Files:"
-  [[ -n "$grid_src" ]] && echo "  Grid: $CONFIG_DIR/$grid_src -> $TEST_DIR/${file_dests["Grid"]}" || echo "  Grid: Not defined"
-  [[ -n "$forcing_src" ]] && echo "  Forcing: $CONFIG_DIR/$forcing_src -> $TEST_DIR/${file_dests["Forcing"]}" || echo "  Forcing: Not defined"
-  [[ -n "$restart_src" ]] && echo "  Restart: $CONFIG_DIR/$restart_src -> $TEST_DIR/${file_dests["Restart"]}" || echo "  Restart: Not defined"
-  [[ -n "$param_src" ]] && echo "  Param: $CONFIG_DIR/$param_src -> $TEST_DIR/${file_dests["Param"]}" || echo "  Param: Not defined"
-  [[ -n "$cppdefs_src" ]] && echo "  Cppdefs: $CONFIG_DIR/$cppdefs_src -> $TEST_DIR/${file_dests["Cppdefs"]}" || echo "  Cppdefs: Not defined"
-  [[ -n "$description_src" ]] && echo "  Description: $CONFIG_DIR/$description_src -> $TEST_DIR/${file_dests["ConfigDescription"]}" || echo "  Description: Not defined"
-  [[ -n "$diffusion_src" ]] && echo "  Diffusion: $CONFIG_DIR/$diffusion_src -> $TEST_DIR/${file_dests["Diffusion"]}" || echo "  Diffusion: Not defined"
-  [[ -n "$infile_src" ]] && echo "  Infile: $CONFIG_DIR/$infile_src -> $TEST_DIR/${file_dests["Infile"]}" || echo "  Infile: Not defined"
-  [[ -n "$jobcomp_src" ]] && echo "  Jobcomp: $CONFIG_DIR/$jobcomp_src -> $TEST_DIR/${file_dests["CompilationScript"]}" || echo "  Jobcomp: Not defined"
+  
+
 }
 
 # Function to copy files based on provided source and destination paths
