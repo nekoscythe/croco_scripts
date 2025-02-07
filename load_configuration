@@ -23,7 +23,17 @@ prompt_config() {
   local initial_conditions=($(yq e ".InitialConditions | keys | .[]" "$CONFIG_FILE"))
   local diffusion_settings=($(yq e ".Diffusion | keys | .[]" "$CONFIG_FILE"))
 
+  # Function to display options with index
+  display_options() {
+    local options=("${!1}")
+    for i in "${!options[@]}"; do
+      echo "$((i+1))) ${options[$i]}"
+    done
+  }
+
   # Prompt for resolution
+  echo "Available Resolutions:"
+  display_options resolutions[@]
   select resolution in "${resolutions[@]}"; do
     if [[ -n "$resolution" ]]; then
       break
@@ -33,6 +43,8 @@ prompt_config() {
   done
 
   # Prompt for biology or physics
+  echo "Choose Biology or Physics:"
+  display_options "biology physics"
   select bio_physics in "biology" "physics"; do
     if [[ -n "$bio_physics" ]]; then
       break
@@ -42,6 +54,8 @@ prompt_config() {
   done
 
   # Prompt for initial condition configuration
+  echo "Available Initial Conditions:"
+  display_options initial_conditions[@]
   select initial_condition in "${initial_conditions[@]}"; do
     if [[ -n "$initial_condition" ]]; then
       break
@@ -51,6 +65,8 @@ prompt_config() {
   done
 
   # Prompt for diffusion settings
+  echo "Available Diffusion Settings:"
+  display_options diffusion_settings[@]
   select diffusion in "${diffusion_settings[@]}"; do
     if [[ -n "$diffusion" ]]; then
       break
