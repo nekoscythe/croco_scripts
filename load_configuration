@@ -69,10 +69,22 @@ prompt_config() {
   echo "  Biology/Physics: $SELECTED_BIO_PHYSICS"
   echo "  Initial Condition: $SELECTED_INITIAL_CONDITION"
   echo "  Diffusion: $SELECTED_DIFFUSION"
+
+  # Confirm configuration with user
+  while true; do
+    read -r -p "Is this configuration correct? (y/n): " confirm
+    case "$confirm" in
+      [yY][eE][sS]|[yY])
+        echo "Configuration confirmed."
+        break
+        ;;
+      [nN][oO]|[nN])
+        echo "Please run the script again to select a different configuration."
+        exit 1
+        ;;
+      *)
+        echo "Invalid input. Please answer 'y' or 'n'."
+        ;;
+    esac
+  done
 }
-
-
-
-
-
-prompt_config
