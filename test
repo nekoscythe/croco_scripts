@@ -1,9 +1,15 @@
 #!/bin/bash
 
+# Check if metadata.yaml exists
+if [[ ! -f "metadata.yaml" ]]; then
+    echo "Error: metadata.yaml not found. This script must be run from within a test directory."
+    exit 1
+fi
+
 # Read dependencies from metadata.yaml
-DEPENDENCIES=$(yq eval '.dependencies' "metadata.yaml" -o=json | yq eval -r '.[]')
+DEPENDENCIES=$(jq -r '.dependencies | .[]' "metadata.yaml")
 # Read parent dependencies from ../../metadata.yaml
-PARENT_DEPENDENCIES=$(yq eval '.dependencies' "../../metadata.yaml" -o=json | yq eval -r '.[]')
+PARENT_DEPENDENCIES=$(jq -r '.dependencies | .[]' "../../metadata.yaml")
 
 # Convert parent dependencies into an array
 IFS=$'\n' read -rd '' -a PARENT_DEPENDENCIES_ARRAY <<< "$PARENT_DEPENDENCIES"
