@@ -33,7 +33,7 @@ prompt_config() {
   done
 
   # Prompt for biology or physics
-  select bio_physics in "Biology" "Physics"; do
+  select bio_physics in "biology" "physics"; do
     if [[ -n "$bio_physics" ]]; then
       break
     else
@@ -83,33 +83,6 @@ prompt_config() {
   done
 }
 
-# Function to determine file paths based on selected configuration
-get_file_paths() {
-  local resolution="$1"
-  local bio_physics="$2"
-  local initial_condition="$3"
-  local diffusion="$4"
-
-  # Load file destinations from config_map.yaml into an associative array
-  declare -A file_dests
-  while IFS=':' read -r key value; do
-    file_dests["${key}"]="${value}"
-  done < <(yq e ".FileDestinations | to_entries | .[] | .key + \":\" + .value" "$CONFIG_FILE")
-
-  # Determine source paths based on configuration
-  local grid_src=$(yq e ".Resolutions.\"$resolution\".input_grd" "$CONFIG_FILE" 2>/dev/null)
-  local forcing_src=$(yq e ".Resolutions.\"$resolution\".input_frc" "$CONFIG_FILE" 2>/dev/null)
-  local param_src=$(yq e ".Resolutions.\"$resolution\".param" "$CONFIG_FILE" 2>/dev/null)
-  local cppdefs_src=$(yq e ".BiologyPhysics.\"$bio_physics\".cppdefs" "$CONFIG_FILE" 2>/dev/null)
-  local restart_src=$(yq e ".InitialConditions.\"$initial_condition\".input_rst_$resolution" "$CONFIG_FILE" 2>/dev/null) #Resolution specific restart
-  local description_src=$(yq e ".InitialConditions.\"$initial_condition\".Description" "$CONFIG_FILE" 2>/dev/null)
-  local diffusion_src=$(yq e ".Diffusion.\"$diffusion\".t3dmix_S" "$CONFIG_FILE" 2>/dev/null)
-  local infile_src=$(yq e ".BaseFiles.infile" "$CONFIG_FILE" 2>/dev/null)
-  local jobcomp_src=$(yq e ".BaseFiles.jobcomp" "$CONFIG_FILE" 2>/dev/null)
-
-  
-
-}
 
 # Function to copy files based on provided source and destination paths
 copy_files() {
@@ -127,13 +100,13 @@ copy_files() {
   # Determine source paths based on configuration
   local grid_src=$(yq e ".Resolutions.\"$resolution\".input_grd" "$CONFIG_FILE" 2>/dev/null)
   local forcing_src=$(yq e ".Resolutions.\"$resolution\".input_frc" "$CONFIG_FILE" 2>/dev/null)
+  local infile_src=$(yq e ".Resolutions.\"$resolution\".infile" "$CONFIG_FILE" 2>/dev/null)
   local param_src=$(yq e ".Resolutions.\"$resolution\".param" "$CONFIG_FILE" 2>/dev/null)
-  local cppdefs_src=$(yq e ".BiologyPhysics.\"$bio_physics\".cppdefs" "$CONFIG_FILE" 2>/dev/null)
   local restart_src=$(yq e ".InitialConditions.\"$initial_condition\".input_rst_$resolution" "$CONFIG_FILE" 2>/dev/null) #Resolution specific restart
   local description_src=$(yq e ".InitialConditions.\"$initial_condition\".Description" "$CONFIG_FILE" 2>/dev/null)
   local diffusion_src=$(yq e ".Diffusion.\"$diffusion\".t3dmix_S" "$CONFIG_FILE" 2>/dev/null)
-  local infile_src=$(yq e ".BaseFiles.infile" "$CONFIG_FILE" 2>/dev/null)
   local jobcomp_src=$(yq e ".BaseFiles.jobcomp" "$CONFIG_FILE" 2>/dev/null)
+  local cppdefs_src=$(yq e ".BaseFiles.cppdefs_$bio_physics" "$CONFIG_FILE" 2>/dev/null)  
 
   # Create symbolic links for grid, forcing, and restart files, and copy the rest
   if [[ -n "$grid_src" ]]; then
@@ -168,5 +141,4 @@ copy_files() {
 prompt_config
 
 # After the configuration is confirmed, determine and print the file paths
-get_file_paths "$SELECTED_RESOLUTION" "$SELECTED_BIO_PHYSICS" "$SELECTED_INITIAL_CONDITION" "$SELECTED_DIFFUSION"
 copy_files "$SELECTED_RESOLUTION" "$SELECTED_BIO_PHYSICS" "$SELECTED_INITIAL_CONDITION" "$SELECTED_DIFFUSION"
