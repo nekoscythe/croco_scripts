@@ -1,5 +1,0 @@
-files:
-    - src: "infile.in"
-      dest: "base_inputs"  # Root directory
-    - src: "jobcomp"
-      dest: "."
