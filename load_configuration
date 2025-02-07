@@ -135,7 +135,7 @@ copy_files() {
   local infile_src=$(yq e ".BaseFiles.infile" "$CONFIG_FILE" 2>/dev/null)
   local jobcomp_src=$(yq e ".BaseFiles.jobcomp" "$CONFIG_FILE" 2>/dev/null)
 
-  # Create symbolic links to the selected files
+  # Create symbolic links for grid, forcing, and restart files, and copy the rest
   if [[ -n "$grid_src" ]]; then
     ln -sf "$CONFIG_DIR/$grid_src" "$TEST_DIR/${file_dests["Grid"]}"
   fi
@@ -146,22 +146,22 @@ copy_files() {
     ln -sf "$CONFIG_DIR/$restart_src" "$TEST_DIR/${file_dests["Restart"]}"
   fi
   if [[ -n "$param_src" ]]; then
-    ln -sf "$CONFIG_DIR/$param_src" "$TEST_DIR/${file_dests["Param"]}"
+    cp "$CONFIG_DIR/$param_src" "$TEST_DIR/${file_dests["Param"]}"
   fi
   if [[ -n "$cppdefs_src" ]]; then
-    ln -sf "$CONFIG_DIR/$cppdefs_src" "$TEST_DIR/${file_dests["Cppdefs"]}"
+    cp "$CONFIG_DIR/$cppdefs_src" "$TEST_DIR/${file_dests["Cppdefs"]}"
   fi
   if [[ -n "$description_src" ]]; then
-    ln -sf "$CONFIG_DIR/$description_src" "$TEST_DIR/${file_dests["ConfigDescription"]}"
+    cp "$CONFIG_DIR/$description_src" "$TEST_DIR/${file_dests["ConfigDescription"]}"
   fi
   if [[ -n "$diffusion_src" ]]; then
-    ln -sf "$CONFIG_DIR/$diffusion_src" "$TEST_DIR/${file_dests["Diffusion"]}"
+    cp "$CONFIG_DIR/$diffusion_src" "$TEST_DIR/${file_dests["Diffusion"]}"
   fi
   if [[ -n "$infile_src" ]]; then
-    ln -sf "$CONFIG_DIR/$infile_src" "$TEST_DIR/${file_dests["Infile"]}"
+    cp "$CONFIG_DIR/$infile_src" "$TEST_DIR/${file_dests["Infile"]}"
   fi
   if [[ -n "$jobcomp_src" ]]; then
-    ln -sf "$CONFIG_DIR/$jobcomp_src" "$TEST_DIR/${file_dests["CompilationScript"]}"
+    cp "$CONFIG_DIR/$jobcomp_src" "$TEST_DIR/${file_dests["CompilationScript"]}"
   fi
 }
 
