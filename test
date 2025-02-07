@@ -38,5 +38,5 @@ for DEPENDENCY in $DEPENDENCIES; do
         echo "$DIFFERENCE"
     fi
 
-
 done
+exit 0
