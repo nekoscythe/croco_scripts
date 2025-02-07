@@ -32,10 +32,12 @@ for DEPENDENCY in $DEPENDENCIES; do
         exit 1
     fi
 
-    #print difference between dependencies
-    echo "Difference between dependencies"
-    DIFFERENCE=$(diff <(echo "$DEPENDENCIES" | tr ' ' '\n' | sort) <(echo "$PARENT_DEPENDENCIES" | tr ' ' '\n' | sort))
-    echo "$DIFFERENCE"
+    # Print difference between dependencies only if a dependency is missing
+    if [[ "$FOUND" == false ]]; then
+        echo "Difference between dependencies"
+        DIFFERENCE=$(diff <(echo "$DEPENDENCIES" | tr ' ' '\n' | sort) <(echo "$PARENT_DEPENDENCIES" | tr ' ' '\n' | sort))
+        echo "$DIFFERENCE"
+    fi
 
 
 done
