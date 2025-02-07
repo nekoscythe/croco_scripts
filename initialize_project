@@ -155,69 +155,16 @@ confirm_destructive_action() {
 copy_base_files() {
     local base_files_dir="$1"
     local root_dir="$2"
-    local manifest="$base_files_dir/manifest.yaml"
 
     if [[ ! -d "$base_files_dir" ]]; then
         log_warning "Base files directory '$base_files_dir' not found."
         return 1
     fi
 
-    # Add YAML parsing safeguard
-    if [[ ! -f "$manifest" ]]; then
-        log_warning "No manifest file found. Copying all files to root."
-        cp -r "$base_files_dir"/* "$root_dir/"
-        return
-    fi
+    cp -r "$base_files_dir"/* "$root_dir/"
 
-    while IFS= read -r entry; do
-        # Safely extract values with default fallbacks
-        src=$(yq eval '.src' <<< "$entry" | tr -d '"')
-        dest=$(yq eval '.dest // "."' <<< "$entry" | tr -d '"')  # Default to root
-
-        full_src="$base_files_dir/$src"
-        final_dest="$root_dir/$dest"
-
-        # Create destination directory if it doesn't exist
-        if [[ -f "$full_src" ]]; then
-            # For files: dest is directory, preserve filename
-            final_dest="$root_dir/$dest/$(basename "$src")"
-            mkdir -p "$(dirname "$final_dest")"
-        elif [[ -d "$full_src" ]]; then
-            # For directories: dest is parent directory
-            mkdir -p "$final_dest"
-        fi
-
-        if [[ "$DRY_RUN" == true ]]; then
-            log_verbose "Would copy: $src -> $final_dest"
-        else
-            cp -r "$full_src" "$final_dest" || {
-                log_warning "Failed to copy $src to $final_dest"
-                continue
-            }
-            log_success "Copied: $src -> $final_dest"
-        fi
-    done < <(yq eval '.files[]' "$manifest" -o=json | jq -c .)
 }
 
-setup_diffusion_configs() {
-    local root_dir="$1"
-    local config_src_dir="$SCRIPT_DIR/configs/diffusion_versions"
-    local config_dest_dir="$root_dir/configs/diffusion_versions"
-
-    # Create config directory structure
-    mkdir -p "$config_dest_dir"
-
-    # Copy all configurations using rsync
-    if [[ "$DRY_RUN" == true ]]; then
-        log_verbose "Dry run: Would copy diffusion configurations from $config_src_dir to $config_dest_dir"
-    else
-        if rsync -av --ignore-missing-args "$config_src_dir/" "$config_dest_dir/"; then
-            log_success "Copied diffusion configurations to $config_dest_dir"
-        else
-            log_warning "Failed to copy some or all diffusion configurations"
-        fi
-    fi
-}
 
 # Modify the jobcomp script to update the SOURCE variable
 modify_jobcomp_script() {
@@ -391,7 +338,6 @@ main() {
 
     # Create directories
     create_directories "${paths[TESTS_DIR]}" "${paths[BINARIES_DIR]}"
-    setup_diffusion_configs "$root_dir"
     write_settings "${paths[SETTINGS_FILE]}" "${paths[ROOT_DIR]}" "${paths[CROCO_DIR]}"
     write_gitignore "${paths[ROOT_DIR]}"
     validate_compile_script "${paths[COMPILE_SCRIPT]}"
