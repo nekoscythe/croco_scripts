@@ -6,14 +6,13 @@ CONFIG_FILE="$SCRIPT_DIR/Configs/config_map.yaml"
 TEST_DIR="test"
 FORCE=false      # Default: don't overwrite
 
-prompt_config
-
 # Function to prompt user for configuration options
 prompt_config() {
   # Load configuration options from config_map.yaml
   local resolutions=($(yq e ".Resolutions | keys | .[]" "$CONFIG_FILE"))
   local initial_conditions=($(yq e ".InitialConditions | keys | .[]" "$CONFIG_FILE"))
   local diffusion_settings=($(yq e ".Diffusion | keys | .[]" "$CONFIG_FILE"))
+
 
   # Prompt for resolution
   echo "Available Resolutions:"
@@ -73,3 +72,7 @@ prompt_config() {
 }
 
 
+
+
+
+prompt_config
