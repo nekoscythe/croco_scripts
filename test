@@ -16,7 +16,6 @@ IFS=$'\n' read -rd '' -a PARENT_DEPENDENCIES_ARRAY <<< "$PARENT_DEPENDENCIES"
 
 # Loop through dependencies and check against parent dependencies
 for DEPENDENCY in $DEPENDENCIES; do
-    echo "Checking $DEPENDENCY"
 
     # Use a flag to track if the dependency is found
     FOUND=false
