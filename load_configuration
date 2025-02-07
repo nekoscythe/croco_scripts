@@ -106,12 +106,9 @@ get_file_paths() {
   local diffusion_src=$(yq e ".Diffusion.\"$diffusion\".t3dmix_S" "$CONFIG_FILE" 2>/dev/null)
   local infile_src=$(yq e ".BaseFiles.infile" "$CONFIG_FILE" 2>/dev/null)
   local jobcomp_src=$(yq e ".BaseFiles.jobcomp" "$CONFIG_FILE" 2>/dev/null)
-
-  
-
 }
 
-# Function to copy files based on provided source and destination paths
+# Function to copy files based on the manifest file
 copy_files() {
   local resolution="$1"
   local bio_physics="$2"
@@ -134,6 +131,37 @@ copy_files() {
   local diffusion_src=$(yq e ".Diffusion.\"$diffusion\".t3dmix_S" "$CONFIG_FILE" 2>/dev/null)
   local infile_src=$(yq e ".BaseFiles.infile" "$CONFIG_FILE" 2>/dev/null)
   local jobcomp_src=$(yq e ".BaseFiles.jobcomp" "$CONFIG_FILE" 2>/dev/null)
+
+  # Load file destinations from config_map.yaml into an associative array
+  declare -A file_dests
+  while IFS=':' read -r key value; do
+    file_dests["${key}"]="${value}"
+  done < <(yq e ".FileDestinations | to_entries | .[] | .key + \":\" + .value" "$CONFIG_FILE")
+
+  # Copy files from manifest.yaml
+  while IFS= read -r line; do
+    if [[ "$line" == files:* ]]; then
+      continue  # Skip the 'files:' line
+    fi
+
+    # Extract src and dest using yq
+    local src=$(yq e ".src" <<< "$line")
+    local dest=$(yq e ".dest" <<< "$line")
+
+    if [[ -n "$src" && -n "$dest" ]]; then
+      # Determine the full source and destination paths
+      local full_src="$SCRIPT_DIR/base_files/$src"
+      local full_dest="$TEST_DIR/$dest"
+
+      # Check if the destination is a directory and create it if it doesn't exist
+      if [[ ! -d "$full_dest" ]]; then
+        mkdir -p "$full_dest"
+      fi
+
+      # Copy the file to the destination
+      cp "$full_src" "$full_dest"
+    fi
+  done < <(yq e ".files | to_yaml" base_files/manifest.yaml)
 
   # Copy the selected files
   if [[ -n "$grid_src" ]]; then
