@@ -13,12 +13,6 @@ Resolutions:
     param: "Resolutions/lowres/param.h"
     infile: "Resolutions/lowres/infile.in"
 
-BiologyPhysics:
-  Biology:
-    cppdefs: "BaseFiles/cppdefs_biology.h"
-  Physics:
-    cppdefs: "BaseFiles/cppdefs_physics.h"
-
 InitialConditions:
   Config1:
     input_rst_hires: "InitialConditions/Config1/input_rst_hires.nc"
@@ -35,14 +29,16 @@ Diffusion:
 
 BaseFiles:
   jobcomp: "BaseFiles/jobcomp"
+  cppdefs_biology: "BaseFiles/cppdefs_biology.h"
+  cppdefs_physics: "BaseFiles/cppdefs_physics.h"
 
 FileDestinations:
-  Grid: "Test/Inputs/input_grd.nc"
-  Forcing: "Test/Inputs/input_frc.nc"
-  Restart: "Test/Inputs/input_rst.nc"
-  Infile: "Test/Inputs/infile.in"
-  ConfigDescription: "Test/Inputs/init_description.txt"
-  Param: "Test/Dependencies/param.h"
-  Cppdefs: "Test/Dependencies/cppdefs.h"
-  Diffusion: "Test/Dependencies/t3dmix_S.F"
-  CompilationScript: "Test/jobcomp"
+  Grid: "inputs/input_grd.nc"
+  Forcing: "inputs/input_frc.nc"
+  Restart: "inputs/input_rst.nc"
+  Infile: "inputs/infile.in"
+  ConfigDescription: "inputs/init_description.txt"
+  Param: "dependencies/param.h"
+  Cppdefs: "dependencies/cppdefs.h"
+  Diffusion: "dependencies/t3dmix_S.F"
+  CompilationScript: "jobcomp"
