@@ -6,13 +6,22 @@ CONFIG_FILE="$SCRIPT_DIR/Configs/config_map.yaml"
 TEST_DIR="test"
 FORCE=false      # Default: don't overwrite
 
+# Check if metadata.yaml exists and extract test_id
+if [[ -f metadata.yaml ]]; then
+  TEST_ID=$(yq e ".test_id" metadata.yaml)
+  TEST_NAME=$(yq e ".test_name" metadata.yaml)
+  echo "Loading config for test: $TEST_ID - $TEST_NAME"
+else
+  echo "Error: metadata.yaml not found. This script must be run from within a test directory."
+  exit 1
+fi
+
 # Function to prompt user for configuration options
 prompt_config() {
   # Load configuration options from config_map.yaml
   local resolutions=($(yq e ".Resolutions | keys | .[]" "$CONFIG_FILE"))
   local initial_conditions=($(yq e ".InitialConditions | keys | .[]" "$CONFIG_FILE"))
   local diffusion_settings=($(yq e ".Diffusion | keys | .[]" "$CONFIG_FILE"))
-
 
   # Prompt for resolution
   echo "Available Resolutions:"
@@ -88,3 +97,49 @@ prompt_config() {
     esac
   done
 }
+
+# Function to determine file paths based on selected configuration
+get_file_paths() {
+  local resolution="$1"
+  local bio_physics="$2"
+  local initial_condition="$3"
+  local diffusion="$4"
+
+  # Load file types from config_map.yaml into an associative array
+  declare -A file_types
+  while IFS=':' read -r key value; do
+    file_types["${key}"]="${value}"
+  done < <(yq e ".FileTypes | to_entries | .[] | .key + \":\" + .value" "$CONFIG_FILE")
+
+  # Construct file paths based on config_map.yaml and selected configuration
+  # First, use the defaults from FileTypes, then override with configuration-specific settings
+
+  # Load any overrides from the selected resolution
+  local resolution_param=$(yq e ".Resolutions.\"$resolution\".param" "$CONFIG_FILE" 2>/dev/null)
+    if [[ -n "$resolution_param" ]]; then
+      file_types["Param"]="$resolution_param"
+  fi
+
+  # Load any overrides from the selected initial condition
+  local initial_condition_file=$(yq e ".InitialConditions.\"$initial_condition\".initial_condition" "$CONFIG_FILE" 2>/dev/null)
+  if [[ -n "$initial_condition_file" ]]; then
+    file_types["InitialCondition"]="$initial_condition_file"
+  fi
+
+  # Load any overrides from the selected diffusion
+  local diffusion_file=$(yq e ".Diffusion.\"$diffusion\".diffusion" "$CONFIG_FILE" 2>/dev/null)
+  if [[ -n "$diffusion_file" ]]; then
+    file_types["Diffusion"]="$diffusion_file"
+  fi
+
+  # Print the selected file paths
+  echo "Selected Files:"
+  for file_type in "${!file_types[@]}"; do
+    echo "  $file_type: $TEST_DIR/${file_types[$file_type]}"
+  done
+}
+
+prompt_config
+
+# After the configuration is confirmed, determine and print the file paths
+get_file_paths "$SELECTED_RESOLUTION" "$SELECTED_BIO_PHYSICS" "$SELECTED_INITIAL_CONDITION" "$SELECTED_DIFFUSION"
