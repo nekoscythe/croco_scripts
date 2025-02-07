@@ -105,38 +105,76 @@ get_file_paths() {
   local initial_condition="$3"
   local diffusion="$4"
 
-  # Load file types from config_map.yaml into an associative array
-  declare -A file_types
+  # Load file destinations from config_map.yaml into an associative array
+  declare -A file_dests
   while IFS=':' read -r key value; do
-    file_types["${key}"]="${value}"
-  done < <(yq e ".FileTypes | to_entries | .[] | .key + \":\" + .value" "$CONFIG_FILE")
+    file_dests["${key}"]="${value}"
+  done < <(yq e ".FileDestinations | to_entries | .[] | .key + \":\" + .value" "$CONFIG_FILE")
 
-  # Construct file paths based on config_map.yaml and selected configuration
-  # First, use the defaults from FileTypes, then override with configuration-specific settings
-
-  # Load any overrides from the selected resolution
-  local resolution_param=$(yq e ".Resolutions.\"$resolution\".param" "$CONFIG_FILE" 2>/dev/null)
-    if [[ -n "$resolution_param" ]]; then
-      file_types["Param"]="$resolution_param"
-  fi
-
-  # Load any overrides from the selected initial condition
-  local initial_condition_file=$(yq e ".InitialConditions.\"$initial_condition\".initial_condition" "$CONFIG_FILE" 2>/dev/null)
-  if [[ -n "$initial_condition_file" ]]; then
-    file_types["InitialCondition"]="$initial_condition_file"
-  fi
-
-  # Load any overrides from the selected diffusion
-  local diffusion_file=$(yq e ".Diffusion.\"$diffusion\".diffusion" "$CONFIG_FILE" 2>/dev/null)
-  if [[ -n "$diffusion_file" ]]; then
-    file_types["Diffusion"]="$diffusion_file"
-  fi
+  # Determine source paths based on configuration
+  local grid_src=$(yq e ".Resolutions.\"$resolution\".input_grd" "$CONFIG_FILE" 2>/dev/null)
+  local forcing_src=$(yq e ".Resolutions.\"$resolution\".input_frc" "$CONFIG_FILE" 2>/dev/null)
+  local param_src=$(yq e ".Resolutions.\"$resolution\".param" "$CONFIG_FILE" 2>/dev/null)
+  local cppdefs_src=$(yq e ".BiologyPhysics.\"$bio_physics\".cppdefs" "$CONFIG_FILE" 2>/dev/null)
+  local restart_src=$(yq e ".InitialConditions.\"$initial_condition\".input_rst_$resolution" "$CONFIG_FILE" 2>/dev/null) #Resolution specific restart
+  local description_src=$(yq e ".InitialConditions.\"$initial_condition\".Description" "$CONFIG_FILE" 2>/dev/null)
+  local diffusion_src=$(yq e ".Diffusion.\"$diffusion\".t3dmix_S" "$CONFIG_FILE" 2>/dev/null)
+  local infile_src=$(yq e ".BaseFiles.infile" "$CONFIG_FILE" 2>/dev/null)
+  local jobcomp_src=$(yq e ".BaseFiles.jobcomp" "$CONFIG_FILE" 2>/dev/null)
+  local manifest_src=$(yq e ".BaseFiles.manifest" "$CONFIG_FILE" 2>/dev/null)
 
   # Print the selected file paths
   echo "Selected Files:"
-  for file_type in "${!file_types[@]}"; do
-    echo "  $file_type: $TEST_DIR/${file_types[$file_type]}"
-  done
+  if [[ -n "$grid_src" ]]; then
+    echo "  Grid: $SCRIPT_DIR/$grid_src -> $TEST_DIR/${file_dests["Grid"]}"
+  else
+    echo "  Grid: Not defined for this configuration"
+  fi
+  if [[ -n "$forcing_src" ]]; then
+    echo "  Forcing: $SCRIPT_DIR/$forcing_src -> $TEST_DIR/${file_dests["Forcing"]}"
+  else
+    echo "  Forcing: Not defined for this configuration"
+  fi
+  if [[ -n "$restart_src" ]]; then
+    echo "  Restart: $SCRIPT_DIR/$restart_src -> $TEST_DIR/${file_dests["Restart"]}"
+  else
+    echo "  Restart: Not defined for this configuration"
+  fi
+  if [[ -n "$param_src" ]]; then
+    echo "  Param: $SCRIPT_DIR/$param_src -> $TEST_DIR/${file_dests["Param"]}"
+  else
+    echo "  Param: Not defined for this configuration"
+  fi
+   if [[ -n "$cppdefs_src" ]]; then
+    echo "  Cppdefs: $SCRIPT_DIR/$cppdefs_src -> $TEST_DIR/${file_dests["Cppdefs"]}"
+  else
+    echo "  Cppdefs: Not defined for this configuration"
+  fi
+   if [[ -n "$description_src" ]]; then
+    echo "  Description: $SCRIPT_DIR/$description_src -> $TEST_DIR/${file_dests["ConfigDescription"]}"
+  else
+    echo "  Description: Not defined for this configuration"
+  fi
+   if [[ -n "$diffusion_src" ]]; then
+    echo "  Diffusion: $SCRIPT_DIR/$diffusion_src -> $TEST_DIR/${file_dests["Diffusion"]}"
+  else
+    echo "  Diffusion: Not defined for this configuration"
+  fi
+   if [[ -n "$infile_src" ]]; then
+    echo "  Infile: $SCRIPT_DIR/$infile_src -> $TEST_DIR/${file_dests["Infile"]}"
+  else
+    echo "  Infile: Not defined for this configuration"
+  fi
+   if [[ -n "$jobcomp_src" ]]; then
+    echo "  Jobcomp: $SCRIPT_DIR/$jobcomp_src -> $TEST_DIR/${file_dests["CompilationScript"]}"
+  else
+    echo "  Jobcomp: Not defined for this configuration"
+  fi
+   if [[ -n "$manifest_src" ]]; then
+    echo "  Manifest: $SCRIPT_DIR/$manifest_src -> $TEST_DIR/${file_dests["Manifest"]}"
+  else
+    echo "  Manifest: Not defined for this configuration"
+  fi
 }
 
 prompt_config

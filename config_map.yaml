@@ -1,0 +1,48 @@
+Resolutions:
+  hires:
+    input_grd: "Resolutions/hires/input_grd.nc"
+    input_frc: "Resolutions/hires/input_frc.nc"
+    param: "Resolutions/hires/param.h"
+  medres:
+    input_grd: "Resolutions/medres/input_grd.nc"
+    input_frc: "Resolutions/medres/input_frc.nc"
+    param: "Resolutions/medres/param.h"
+  lowres:
+    param: "Resolutions/lowres/param.h"
+
+BiologyPhysics:
+  Biology:
+    cppdefs: "BaseFiles/cppdefs_biology.h"
+  Physics:
+    cppdefs: "BaseFiles/cppdefs_physics.h"
+
+InitialConditions:
+  Config1:
+    input_rst_hires: "InitialConditions/Config1/input_rst_hires.nc"
+    input_rst_medres: "InitialConditions/Config1/input_rst_medres.nc"
+    Description: "InitialConditions/Config1/Description.txt"
+
+Diffusion:
+  Control:
+    t3dmix_S: "Diffusion/t3dmix_S_Control.F"
+  EHDA:
+    t3dmix_S: "Diffusion/t3dmix_S_EHDA.F"
+  EHDB:
+    t3dmix_S: "Diffusion/t3dmix_S_EHDB.F"
+
+BaseFiles:
+  infile: "BaseFiles/infile.in"
+  jobcomp: "BaseFiles/jobcomp"
+  manifest: "BaseFiles/manifest.yaml"
+
+FileDestinations:
+  Grid: "Test/Inputs/input_grd.nc"
+  Forcing: "Test/Inputs/input_frc.nc"
+  Restart: "Test/Inputs/input_rst.nc"
+  Infile: "Test/Inputs/infile.in"
+  ConfigDescription: "Test/Inputs/init_description.txt"
+  Param: "Test/Dependencies/param.h"
+  Cppdefs: "Test/Dependencies/cppdefs.h"
+  Diffusion: "Test/Dependencies/t3dmix_S.F"
+  CompilationScript: "Test/jobcomp"
+  Manifest: "Test/manifest.yaml"
