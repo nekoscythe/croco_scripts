@@ -6,4 +6,70 @@ CONFIG_FILE="$SCRIPT_DIR/Configs/config_map.yaml"
 TEST_DIR="test"
 FORCE=false      # Default: don't overwrite
 
+prompt_config
+
+# Function to prompt user for configuration options
+prompt_config() {
+  # Load configuration options from config_map.yaml
+  local resolutions=($(yq e ".Resolutions | keys | .[]" "$CONFIG_FILE"))
+  local initial_conditions=($(yq e ".InitialConditions | keys | .[]" "$CONFIG_FILE"))
+  local diffusion_settings=($(yq e ".Diffusion | keys | .[]" "$CONFIG_FILE"))
+
+  # Prompt for resolution
+  echo "Available Resolutions:"
+  select resolution in "${resolutions[@]}"; do
+    if [[ -n "$resolution" ]]; then
+      echo "You selected resolution: $resolution"
+      break
+    else
+      echo "Invalid selection. Please choose a resolution from the list."
+    fi
+  done
+
+  # Prompt for biology or physics
+  echo "Choose between Biology or Physics:"
+  select bio_physics in "Biology" "Physics"; do
+    if [[ -n "$bio_physics" ]]; then
+      echo "You selected: $bio_physics"
+      break
+    else
+      echo "Invalid selection. Please choose Biology or Physics."
+    fi
+  done
+
+  # Prompt for initial condition configuration
+  echo "Available Initial Condition Configurations:"
+  select initial_condition in "${initial_conditions[@]}"; do
+    if [[ -n "$initial_condition" ]]; then
+      echo "You selected initial condition: $initial_condition"
+      break
+    else
+      echo "Invalid selection. Please choose an initial condition from the list."
+    fi
+  done
+
+  # Prompt for diffusion settings
+  echo "Available Diffusion Settings:"
+  select diffusion in "${diffusion_settings[@]}"; do
+    if [[ -n "$diffusion" ]]; then
+      echo "You selected diffusion setting: $diffusion"
+      break
+    else
+      echo "Invalid selection. Please choose a diffusion setting from the list."
+    fi
+  done
+
+  # Store the selected options (you can modify this to return the values)
+  SELECTED_RESOLUTION="$resolution"
+  SELECTED_BIO_PHYSICS="$bio_physics"
+  SELECTED_INITIAL_CONDITION="$initial_condition"
+  SELECTED_DIFFUSION="$diffusion"
+
+  echo "Selected Configuration:"
+  echo "  Resolution: $SELECTED_RESOLUTION"
+  echo "  Biology/Physics: $SELECTED_BIO_PHYSICS"
+  echo "  Initial Condition: $SELECTED_INITIAL_CONDITION"
+  echo "  Diffusion: $SELECTED_DIFFUSION"
+}
+
 
