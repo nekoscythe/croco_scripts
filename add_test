@@ -50,50 +50,7 @@ list_tests() {
     done
 }
 
-get_resolution_configuration() {
-    # Prompt user for input with options included
-    read -p "
-Choose from the following resolutions:
-1. Lowres
-2. Medres
-3. Hires
-Enter the resolution configuration (1-3): " RESOLUTION
 
-    # Validate the user's input
-    case $RESOLUTION in
-        1)
-            echo "lowres"
-            ;;
-        2)
-            echo "medres"
-            ;;
-        3)
-            echo "hires"
-            ;;
-        *)
-            echo "Invalid selection. Please choose a number between 1 and 3."
-            return 1
-            ;;
-    esac
-}
-
-
-
-
-copy_resolution_config() {
-    local RESOLUTION=$1
-    local TEST_PATH=$2
-    local SCRIPT_DIR=$(get_script_dir)
-    local CONFIG_FILE="$SCRIPT_DIR/configs/resolutions/$RESOLUTION/param.h"
-
-    
-    if [[ -f "$CONFIG_FILE" ]]; then
-        cp "$CONFIG_FILE" "$TEST_PATH/"
-        echo "Copied $RESOLUTION configuration file to $TEST_PATH"
-    else
-        echo "Warning: Resolution configuration file not found at $CONFIG_FILE"
-    fi
-}
 
 
 
@@ -107,14 +64,12 @@ SETTINGS_FILE="$ROOT_DIR/settings.yaml"
 TESTS_DIR="$ROOT_DIR/$(yq eval '.project.tests_dir' "$SETTINGS_FILE")"
 BINARIES_DIR="$ROOT_DIR/$(yq eval '.project.binaries_dir' "$SETTINGS_FILE")"
 CROCO_DIR=$(yq eval '.project.croco_dir' "$SETTINGS_FILE")
-BASE_INPUTS_DIR="$ROOT_DIR/$(yq eval '.project.base_inputs_dir' "$SETTINGS_FILE")"
 
 echo ""
 echo "ROOT_DIR=$ROOT_DIR"
 echo "TESTS_DIR=$TESTS_DIR"
 echo "BINARIES_DIR=$BINARIES_DIR"
 echo "CROCO_DIR=$CROCO_DIR"
-echo "BASE_INPUTS_DIR=$BASE_INPUTS_DIR"
 echo ""
 
 
@@ -141,29 +96,10 @@ if [[ -z "$REASON" ]]; then
     exit 1
 fi
 
-# Promp for the resolution configuration
-resolution=$(get_resolution_configuration)
 
-# Ask if the test is based on a previous test
-read -p "
-Is this test based on a previous test? (y/n): " HAS_PARENT
-if [[ "$HAS_PARENT" =~ ^[Yy]$ ]]; then
-    list_tests "$TESTS_DIR"
-    read -p "
-    Enter the ID of the parent test: " PARENT_TEST_ID
+PARENT_TEST_ID="null"
+PARENT_TEST_NAME="null"
 
-    # Validate parent test ID
-    PARENT_TEST_PATH=$(find "$TESTS_DIR" -name "metadata.yaml" -exec grep -l "test_id: $PARENT_TEST_ID" {} + | xargs dirname)
-    if [[ -z "$PARENT_TEST_PATH" ]]; then
-        echo "Error: Parent test with ID $PARENT_TEST_ID not found."
-        exit 1
-    fi
-
-    PARENT_TEST_NAME=$(yq eval '.test_name' "$PARENT_TEST_PATH/metadata.yaml")
-else
-    PARENT_TEST_ID="null"
-    PARENT_TEST_NAME="null"
-fi
 
 # Generate the test name
 TEST_NAME="Test${NEXT_TEST_ID}_${DESCRIPTION}"
@@ -181,11 +117,7 @@ echo "Test ID: $NEXT_TEST_ID"
 echo "Test Name: $TEST_NAME"
 echo "Description: $DESCRIPTION"
 echo "Reason: $REASON"
-if [[ "$HAS_PARENT" =~ ^[Yy]$ ]]; then
-    echo "Parent Test: $PARENT_TEST_NAME (ID: $PARENT_TEST_ID)"
-else
-    echo "Parent Test: None (independent test)"
-fi
+echo "Parent Test: None (independent test)"
 
 read -p "
 Do you want to proceed with the creation of the test? (y/n): " CONFIRM
@@ -208,68 +140,27 @@ mkdir -p "$TEST_PATH/outputs"
 #create the inputs folder
 mkdir -p "$TEST_PATH/inputs"
 
-# Copy the resolution configuration file to the test directory
-copy_resolution_config "$resolution" "$TEST_PATH"
+cd "$TEST_PATH"
 
+# Update paths in the infile.in file
+INFILE="$TEST_PATH/inputs/infile.in"
+if [[ -f "$INFILE" ]]; then
 
+    # Update the test title in the infile.in file
+    echo "Updating test title in $INFILE..."
 
+    # Replace the placeholder with the actual test name and ID
+    sed -i "s|(To Be Modified by script, should be the same as test title and test number)|$TEST_NAME (ID: $NEXT_TEST_ID)|g" "$INFILE"
 
-# Handle inheritance from parent test
-if [[ "$HAS_PARENT" =~ ^[Yy]$ ]]; then
-    echo "Copying dependencies and input files from parent test: $PARENT_TEST_NAME"
-    echo ""
-
-    # Copy all files and directories from the parent test, excluding the outputs folder
-    rsync -av --exclude='outputs' "$PARENT_TEST_PATH/" "$TEST_PATH/"
-
-    echo ""
-
-    # Update the metadata to reflect the parent test
-    PARENT_METADATA_FILE="$PARENT_TEST_PATH/metadata.yaml"
-    PARENT_DEPENDENCIES=$(yq eval '.dependencies' "$PARENT_METADATA_FILE")
+    echo "Test title in $INFILE updated successfully."
 else
-
-    # Copy base files to the inputs directory
-    echo "Copying base inputs from $BASE_INPUTS_DIR to $TEST_PATH/inputs"
-    cp -r "$BASE_INPUTS_DIR/"* "$TEST_PATH/inputs/"
-
-    # Update paths in the infile.in file
-    INFILE="$TEST_PATH/inputs/infile.in"
-    if [[ -f "$INFILE" ]]; then
-    
-        # Update the test title in the infile.in file
-        echo "Updating test title in $INFILE..."
-    
-        # Replace the placeholder with the actual test name and ID
-        sed -i "s|(To Be Modified by script, should be the same as test title and test number)|$TEST_NAME (ID: $NEXT_TEST_ID)|g" "$INFILE"
-    
-        echo "Test title in $INFILE updated successfully."
-    else
-        echo "Warning: infile.in not found in $TEST_PATH/inputs. Skipping updates."
-    fi
-
-    # Extract the entire dependencies block from settings.yaml
-    dependencies=$(yq eval 'explode(.) | .dependencies' "$SETTINGS_FILE")
-
-    # Use yq to find the dependencies, and copy them to the dependencies directory
-    dependency_dir="$TEST_PATH/dependencies"
-    echo "Copying dependencies to $dependency_dir"
-    mkdir -p "$dependency_dir"
-    dependency_count=$(echo "$dependencies" | yq eval 'length' -)
-
-    for ((i = 0; i < dependency_count; i++)); do
-        dependency_location=$(echo "$dependencies" | yq eval ".[$i].location" -)
-        dependency_path=$(echo "$dependencies" | yq eval ".[$i].path" -)
-
-        full_path="$dependency_location/$dependency_path"
-
-        echo "Copying dependency: $full_path"
-        cp "$full_path" "$dependency_dir"
-    done
+    echo "Warning: infile.in not found in $TEST_PATH/inputs. Skipping updates."
 fi
 
+
+
 # Create metadata
-METADATA_FILE="$TEST_PATH/metadata.yaml"
+METADATA_FILE="metadata.yaml"
 cat >"$METADATA_FILE" <<EOF
 test_id: $NEXT_TEST_ID
 test_name: $TEST_NAME
@@ -279,34 +170,5 @@ parent_test_id: $PARENT_TEST_ID
 date: $(date +'%Y-%m-%d %H:%M:%S')
 EOF
 
-# Append dependencies block to metadata file using yq
-if [[ "$HAS_PARENT" =~ ^[Yy]$ ]]; then
-    echo "$PARENT_DEPENDENCIES" | yq eval '.' - | yq eval '. as $deps | {"dependencies": $deps}' - >>"$METADATA_FILE"
-else
-    echo "$dependencies" | yq eval '.' - | yq eval '. as $deps | {"dependencies": $deps}' - >>"$METADATA_FILE"
-fi
-
-# Add parent test
-if [[ "$HAS_PARENT" =~ ^[Yy]$ ]]; then
-    echo "parent_test: $PARENT_TEST_NAME" >>"$METADATA_FILE"
-fi
 
 echo "Test '$TEST_NAME' created successfully."
-
-# # Ask if the user wants to create the 3-subtest structure
-# read -p "
-# Do you want to create the standard 3-subtest structure (Control, EHDA, EHDB)? (y/n): " CREATE_SUBTESTS
-# if [[ "$CREATE_SUBTESTS" =~ ^[Yy]$ ]]; then
-#     # Ensure the add_diffusion_subtests.sh script exists
-#     ADD_SUBTESTS_SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-#     ADD_SUBTESTS_SCRIPT="$ADD_SUBTESTS_SCRIPT_DIR/add_diffusion_subtests"
-#     if [[ -f "$ADD_SUBTESTS_SCRIPT" ]]; then
-#         echo "Creating standard 3-subtest structure..."
-#         #cd to the test directory
-#         cd "$TEST_PATH"
-#         # Run the subtest script
-#         bash "$ADD_SUBTESTS_SCRIPT" || error_exit "Failed to create subtests."
-#     else
-#         echo "add_diffusion_subtests script not found at $ADD_SUBTESTS_SCRIPT. Subtests will not be created."
-#     fi
-# fi
