@@ -10,13 +10,17 @@ Resolutions:
     param: "Resolutions/medres/param.h"
     infile: "Resolutions/medres/infile.in"
   lowres:
+    input_grd: "Resolutions/lowres/input_grd.nc"
+    input_frc: "Resolutions/lowres/input_frc.nc"
     param: "Resolutions/lowres/param.h"
     infile: "Resolutions/lowres/infile.in"
+
 
 InitialConditions:
   Config1:
     input_rst_hires: "InitialConditions/Config1/input_rst_hires.nc"
     input_rst_medres: "InitialConditions/Config1/input_rst_medres.nc"
+    input_rst_lowres: "InitialConditions/Config1/input_rst_lowres.nc"
     Description: "InitialConditions/Config1/Description.txt"
 
 Diffusion:
@@ -28,7 +32,6 @@ Diffusion:
     t3dmix_S: "Diffusion/t3dmix_S_EHDB.F"
 
 BaseFiles:
-  jobcomp: "BaseFiles/jobcomp"
   cppdefs_biology: "BaseFiles/cppdefs_biology.h"
   cppdefs_physics: "BaseFiles/cppdefs_physics.h"
 
@@ -41,4 +44,3 @@ FileDestinations:
   Param: "dependencies/param.h"
   Cppdefs: "dependencies/cppdefs.h"
   Diffusion: "dependencies/t3dmix_S.F"
-  CompilationScript: "jobcomp"
