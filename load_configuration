@@ -3,142 +3,139 @@
 # --- Defaults ---
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
 CONFIG_DIR="$SCRIPT_DIR/Configs"
-CONFIG_FILE="$SCRIPT_DIR/Configs/config_map.yaml"
-FORCE=false      # Default: don't overwrite
+CONFIG_FILE="$CONFIG_DIR/config_map.yaml"
 
-# Check if metadata.yaml exists and extract test_id
-if [[ -f metadata.yaml ]]; then
-  TEST_ID=$(yq e ".test_id" metadata.yaml)
-  TEST_NAME=$(yq e ".test_name" metadata.yaml)
-  TEST_DIR=$(pwd)
-else
-  echo "Error: metadata.yaml not found. Please run this script from within a test directory."
-  exit 1
-fi
+# Function to check if metadata.yaml exists and extract test details
+check_metadata() {
+  if [[ -f metadata.yaml ]]; then
+    TEST_ID=$(yq e ".test_id" metadata.yaml)
+    TEST_NAME=$(yq e ".test_name" metadata.yaml)
+    TEST_DIR=$(pwd)
+  else
+    echo -e "\n\033[1;31mError:\033[0m metadata.yaml not found."
+    echo "Please run this script from within a test directory."
+    exit 1
+  fi
+}
 
 # Function to prompt user for configuration options
 prompt_config() {
-  # Load configuration options from config_map.yaml
+  echo -e "\n\033[1;34m--- Configuration Setup ---\033[0m"
+
+  # Load configuration options
   local resolutions=($(yq e ".Resolutions | keys | .[]" "$CONFIG_FILE"))
   local initial_conditions=($(yq e ".InitialConditions | keys | .[]" "$CONFIG_FILE"))
   local diffusion_settings=($(yq e ".Diffusion | keys | .[]" "$CONFIG_FILE"))
 
-  # Prompt for resolution
+  echo -e "\n\033[1;33mSelect Resolution:\033[0m"
   select resolution in "${resolutions[@]}"; do
-    if [[ -n "$resolution" ]]; then
-      break
-    else
-      echo "Invalid selection. Please choose a resolution from the list."
-    fi
+    [[ -n "$resolution" ]] && break
+    echo "Invalid selection. Please choose a valid option."
   done
 
-  # Prompt for biology or physics
+  echo -e "\n\033[1;33mSelect Model Type:\033[0m"
   select bio_physics in "biology" "physics"; do
-    if [[ -n "$bio_physics" ]]; then
-      break
-    else
-      echo "Invalid selection. Please choose Biology or Physics."
-    fi
+    [[ -n "$bio_physics" ]] && break
+    echo "Invalid selection. Please choose a valid option."
   done
 
-  # Prompt for initial condition configuration
+  echo -e "\n\033[1;33mSelect Initial Condition:\033[0m"
   select initial_condition in "${initial_conditions[@]}"; do
-    if [[ -n "$initial_condition" ]]; then
-      break
-    else
-      echo "Invalid selection. Please choose an initial condition from the list."
-    fi
+    [[ -n "$initial_condition" ]] && break
+    echo "Invalid selection. Please choose a valid option."
   done
 
-  # Prompt for diffusion settings
+  echo -e "\n\033[1;33mSelect Diffusion Setting:\033[0m"
   select diffusion in "${diffusion_settings[@]}"; do
-    if [[ -n "$diffusion" ]]; then
-      break
-    else
-      echo "Invalid selection. Please choose a diffusion setting from the list."
-    fi
+    [[ -n "$diffusion" ]] && break
+    echo "Invalid selection. Please choose a valid option."
   done
 
-  # Store the selected options (you can modify this to return the values)
+  # Store selected options
   SELECTED_RESOLUTION="$resolution"
   SELECTED_BIO_PHYSICS="$bio_physics"
   SELECTED_INITIAL_CONDITION="$initial_condition"
   SELECTED_DIFFUSION="$diffusion"
 
-  # Confirm configuration with user
+  # Confirm selection
+  echo -e "\n\033[1;34m--- Selected Configuration ---\033[0m"
+  echo -e "  Resolution: \033[1;32m$SELECTED_RESOLUTION\033[0m"
+  echo -e "  Model Type: \033[1;32m$SELECTED_BIO_PHYSICS\033[0m"
+  echo -e "  Initial Condition: \033[1;32m$SELECTED_INITIAL_CONDITION\033[0m"
+  echo -e "  Diffusion Setting: \033[1;32m$SELECTED_DIFFUSION\033[0m"
+  
   while true; do
     read -r -p "Confirm configuration? (y/n): " confirm
     case "$confirm" in
-      [yY][eE][sS]|[yY])
-        break
-        ;;
+      [yY][eE][sS]|[yY]) break ;;
       [nN][oO]|[nN])
-        echo "Please run the script again to select a different configuration."
+        echo -e "\033[1;31mAborted.\033[0m Please rerun the script to select a different configuration."
         exit 1
         ;;
-      *)
-        echo "Invalid input. Please answer 'y' or 'n'."
-        ;;
+      *) echo "Invalid input. Please answer 'y' or 'n'." ;;
     esac
   done
 }
 
-
-# Function to copy files based on provided source and destination paths
+# Function to copy files based on selected configuration
 copy_files() {
   local resolution="$1"
   local bio_physics="$2"
   local initial_condition="$3"
   local diffusion="$4"
 
-  # Load file destinations from config_map.yaml into an associative array
+  echo -e "\n\033[1;34m--- Copying Configuration Files ---\033[0m"
+
   declare -A file_dests
   while IFS=':' read -r key value; do
     file_dests["${key}"]="${value}"
   done < <(yq e ".FileDestinations | to_entries | .[] | .key + \":\" + .value" "$CONFIG_FILE")
 
-  # Determine source paths based on configuration
   local grid_src=$(yq e ".Resolutions.\"$resolution\".input_grd" "$CONFIG_FILE" 2>/dev/null)
   local forcing_src=$(yq e ".Resolutions.\"$resolution\".input_frc" "$CONFIG_FILE" 2>/dev/null)
   local infile_src=$(yq e ".Resolutions.\"$resolution\".infile" "$CONFIG_FILE" 2>/dev/null)
   local param_src=$(yq e ".Resolutions.\"$resolution\".param" "$CONFIG_FILE" 2>/dev/null)
-  local restart_src=$(yq e ".InitialConditions.\"$initial_condition\".input_rst_$resolution" "$CONFIG_FILE" 2>/dev/null) #Resolution specific restart
+  local restart_src=$(yq e ".InitialConditions.\"$initial_condition\".input_rst_$resolution" "$CONFIG_FILE" 2>/dev/null)
   local description_src=$(yq e ".InitialConditions.\"$initial_condition\".Description" "$CONFIG_FILE" 2>/dev/null)
   local diffusion_src=$(yq e ".Diffusion.\"$diffusion\".t3dmix_S" "$CONFIG_FILE" 2>/dev/null)
-  local jobcomp_src=$(yq e ".BaseFiles.jobcomp" "$CONFIG_FILE" 2>/dev/null)
-  local cppdefs_src=$(yq e ".BaseFiles.cppdefs_$bio_physics" "$CONFIG_FILE" 2>/dev/null)  
+  local cppdefs_src=$(yq e ".BaseFiles.cppdefs_$bio_physics" "$CONFIG_FILE" 2>/dev/null)
 
-  # Create symbolic links for grid, forcing, and restart files, and copy the rest
-  if [[ -n "$grid_src" ]]; then
-    ln -sf "$CONFIG_DIR/$grid_src" "$TEST_DIR/${file_dests["Grid"]}"
-  fi
-  if [[ -n "$forcing_src" ]]; then
-    ln -sf "$CONFIG_DIR/$forcing_src" "$TEST_DIR/${file_dests["Forcing"]}"
-  fi
-  if [[ -n "$restart_src" ]]; then
-    ln -sf "$CONFIG_DIR/$restart_src" "$TEST_DIR/${file_dests["Restart"]}"
-  fi
-  if [[ -n "$param_src" ]]; then
-    cp "$CONFIG_DIR/$param_src" "$TEST_DIR/${file_dests["Param"]}"
-  fi
-  if [[ -n "$cppdefs_src" ]]; then
-    cp "$CONFIG_DIR/$cppdefs_src" "$TEST_DIR/${file_dests["Cppdefs"]}"
-  fi
-  if [[ -n "$description_src" ]]; then
-    cp "$CONFIG_DIR/$description_src" "$TEST_DIR/${file_dests["ConfigDescription"]}"
-  fi
-  if [[ -n "$diffusion_src" ]]; then
-    cp "$CONFIG_DIR/$diffusion_src" "$TEST_DIR/${file_dests["Diffusion"]}"
-  fi
-  if [[ -n "$infile_src" ]]; then
-    cp "$CONFIG_DIR/$infile_src" "$TEST_DIR/${file_dests["Infile"]}"
-  fi
-  if [[ -n "$jobcomp_src" ]]; then
-    cp "$CONFIG_DIR/$jobcomp_src" "$TEST_DIR/${file_dests["CompilationScript"]}"
-  fi
+  # Create symbolic links or copy files
+  [[ -n "$grid_src" ]] && ln -sf "$CONFIG_DIR/$grid_src" "$TEST_DIR/${file_dests["Grid"]}"
+  [[ -n "$forcing_src" ]] && ln -sf "$CONFIG_DIR/$forcing_src" "$TEST_DIR/${file_dests["Forcing"]}"
+  [[ -n "$restart_src" ]] && ln -sf "$CONFIG_DIR/$restart_src" "$TEST_DIR/${file_dests["Restart"]}"
+  [[ -n "$param_src" ]] && cp "$CONFIG_DIR/$param_src" "$TEST_DIR/${file_dests["Param"]}"
+  [[ -n "$cppdefs_src" ]] && cp "$CONFIG_DIR/$cppdefs_src" "$TEST_DIR/${file_dests["Cppdefs"]}"
+  [[ -n "$description_src" ]] && cp "$CONFIG_DIR/$description_src" "$TEST_DIR/${file_dests["ConfigDescription"]}"
+  [[ -n "$diffusion_src" ]] && cp "$CONFIG_DIR/$diffusion_src" "$TEST_DIR/${file_dests["Diffusion"]}"
+  [[ -n "$infile_src" ]] && cp "$CONFIG_DIR/$infile_src" "$TEST_DIR/${file_dests["Infile"]}"
+
+  echo -e "\033[1;32mConfiguration files successfully copied!\033[0m"
 }
 
-prompt_config
+# Function to edit metadata.yaml to include the configuration details
+update_metadata() {
+  local metadata_file="metadata.yaml"
 
-# After the configuration is confirmed, determine and print the file paths
-copy_files "$SELECTED_RESOLUTION" "$SELECTED_BIO_PHYSICS" "$SELECTED_INITIAL_CONDITION" "$SELECTED_DIFFUSION"
+  yq e ".Config.Resolution = \"$SELECTED_RESOLUTION\"" -i "$metadata_file"
+  yq e ".Config.ModelType = \"$SELECTED_BIO_PHYSICS\"" -i "$metadata_file"
+  yq e ".Config.InitialCondition = \"$SELECTED_INITIAL_CONDITION\"" -i "$metadata_file"
+  yq e ".Config.DiffusionSetting = \"$SELECTED_DIFFUSION\"" -i "$metadata_file"
+
+  echo -e "\n\033[1;32mMetadata updated with configuration details.\033[0m"
+
+}
+
+
+# Main function to orchestrate the process
+setup_configuration() {
+  check_metadata
+  prompt_config
+  copy_files "$SELECTED_RESOLUTION" "$SELECTED_BIO_PHYSICS" "$SELECTED_INITIAL_CONDITION" "$SELECTED_DIFFUSION"
+  update_metadata
+}
+
+# Run the setup if the script is executed directly
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+  setup_configuration
+fi
