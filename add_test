@@ -2,173 +2,182 @@
 
 # Function to get the root directory of the project by looking for settings.yaml
 get_root_dir() {
-    DIR="$(pwd)"
-    while [[ ! -f "$DIR/settings.yaml" && "$DIR" != "/" ]]; do
-        DIR=$(dirname "$DIR")
+    local dir="$(pwd)"
+    while [[ ! -f "$dir/settings.yaml" && "$dir" != "/" ]]; do
+        dir=$(dirname "$dir")
     done
 
-    if [[ -f "$DIR/settings.yaml" ]]; then
-        echo "$DIR"
+    if [[ -f "$dir/settings.yaml" ]]; then
+        echo "$dir"
     else
-        echo "$(pwd)"
+        echo "Error: settings.yaml not found in any parent directory."
         exit 1
     fi
 }
 
 get_script_dir() {
-    # Resolve the source path of the script
-    SOURCE="${BASH_SOURCE[0]}"
-    while [ -h "$SOURCE" ]; do # Follow symbolic links
-        DIR="$(cd -P "$(dirname "$SOURCE")" && pwd)"
-        SOURCE="$(readlink "$SOURCE")"
-        [[ $SOURCE != /* ]] && SOURCE="$DIR/$SOURCE" # If the link is relative, resolve it
-    done
-    DIR="$(cd -P "$(dirname "$SOURCE")" && pwd)"
-    echo "$DIR"
+    local script_dir
+    script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
+    echo "$script_dir"
 }
 
-
+# Function to get the next available test ID
 get_next_test_id() {
-    local TESTS_DIR="$1"
-    local LAST_TEST_ID=$(find "$TESTS_DIR" -name "metadata.yaml" -exec yq eval '.test_id' {} \; | grep -E '^[0-9]+$' | sort -n | tail -1)
-    if [[ -z "$LAST_TEST_ID" ]]; then
+    local tests_dir="$1"
+    local last_test_id
+    last_test_id=$(find "$tests_dir" -name "metadata.yaml" -exec yq eval '.test_id' {} \; | grep -E '^[0-9]+$' | sort -n | tail -1)
+    
+    if [[ -z "$last_test_id" ]]; then
         echo "1"
     else
-        echo "$((LAST_TEST_ID + 1))"
+        echo "$((last_test_id + 1))"
     fi
 }
 
-# Function to list tests with their IDs and names
-list_tests() {
-    local TESTS_DIR="$1"
-    echo "Available Tests:"
-    echo "----------------"
-    find "$TESTS_DIR" -name "metadata.yaml" | while read -r METADATA_FILE; do
-        TEST_ID=$(yq eval '.test_id' "$METADATA_FILE")
-        TEST_NAME=$(yq eval '.test_name' "$METADATA_FILE")
-        echo "$TEST_ID: $TEST_NAME"
+# Function to prompt user for input (ensures non-empty input)
+prompt_user_input() {
+    local prompt_message="$1"
+    local user_input
+
+    while true; do
+        read -p "$prompt_message" user_input
+        if [[ -n "$user_input" ]]; then
+            echo "$user_input"
+            return
+        else
+            echo "Error: Input cannot be empty."
+        fi
     done
 }
 
+# Function to confirm before proceeding
+confirm_action() {
+    local message="$1"
+    while true; do
+        read -p "$message (y/n): " confirm
+        case "$confirm" in
+            [Yy]* ) return 0 ;;  # Proceed
+            [Nn]* ) echo "Action aborted."; exit 0 ;;  # Exit script
+            * ) echo "Please enter 'y' or 'n'." ;;
+        esac
+    done
+}
 
+# Function to create test directory and structure
+create_test_directory() {
+    local test_path="$1"
 
+    echo "Creating test directory: $test_path"
+    mkdir -p "$test_path/subtests" "$test_path/outputs" "$test_path/inputs" "$test_path/dependencies"
+}
 
+# Function to create metadata.yaml file
+create_metadata_file() {
+    local metadata_file="$1"
+    local test_id="$2"
+    local test_name="$3"
+    local description="$4"
+    local reason="$5"
 
-
-
-# Get the root directory
-ROOT_DIR=$(get_root_dir)
-
-# Retrieve settings from settings.yaml
-SETTINGS_FILE="$ROOT_DIR/settings.yaml"
-TESTS_DIR="$ROOT_DIR/$(yq eval '.project.tests_dir' "$SETTINGS_FILE")"
-BINARIES_DIR="$ROOT_DIR/$(yq eval '.project.binaries_dir' "$SETTINGS_FILE")"
-CROCO_DIR=$(yq eval '.project.croco_dir' "$SETTINGS_FILE")
-
-echo ""
-echo "ROOT_DIR=$ROOT_DIR"
-echo "TESTS_DIR=$TESTS_DIR"
-echo "BINARIES_DIR=$BINARIES_DIR"
-echo "CROCO_DIR=$CROCO_DIR"
-echo ""
-
-
-
-# Get the next test ID
-NEXT_TEST_ID=$(get_next_test_id "$TESTS_DIR")
-
-echo "NEXT_TEST_ID=$NEXT_TEST_ID"
-echo ""
-
-# Prompt for a descriptive suffix
-read -p "
-Enter a short description of the test (e.g., HighDiffusivity_Bio): " DESCRIPTION
-if [[ -z "$DESCRIPTION" ]]; then
-    echo "Error: Description cannot be empty."
-    exit 1
-fi
-
-# Prompt for the reason for creating the test
-read -p "
-Enter the reason for creating this test: " REASON
-if [[ -z "$REASON" ]]; then
-    echo "Error: Reason cannot be empty."
-    exit 1
-fi
-
-
-PARENT_TEST_ID="null"
-PARENT_TEST_NAME="null"
-
-
-# Generate the test name
-TEST_NAME="Test${NEXT_TEST_ID}_${DESCRIPTION}"
-
-# Check if the test already exists
-if [[ -d "$ROOT_DIR/$TESTS_DIR/$TEST_NAME" ]]; then
-    echo "Error: Test '$TEST_NAME' already exists. Please choose a different description."
-    exit 1
-fi
-
-# Confirm the test creation
-echo ""
-echo "Creating a new test with the following details:"
-echo "Test ID: $NEXT_TEST_ID"
-echo "Test Name: $TEST_NAME"
-echo "Description: $DESCRIPTION"
-echo "Reason: $REASON"
-echo "Parent Test: None (independent test)"
-
-read -p "
-Do you want to proceed with the creation of the test? (y/n): " CONFIRM
-if [[ ! "$CONFIRM" =~ ^[Yy]$ ]]; then
-    echo "Test creation aborted."
-    exit 0
-fi
-
-# Create the test directory
-TEST_PATH="$TESTS_DIR/$TEST_NAME"
-echo "Creating test directory: $TEST_PATH"
-mkdir -p "$TEST_PATH"
-
-# Add a folder in the test directory for subtests called "subtests"
-mkdir -p "$TEST_PATH/subtests"
-
-# Create the outputs folder
-mkdir -p "$TEST_PATH/outputs"
-
-#create the inputs folder
-mkdir -p "$TEST_PATH/inputs"
-
-cd "$TEST_PATH"
-
-# Update paths in the infile.in file
-INFILE="$TEST_PATH/inputs/infile.in"
-if [[ -f "$INFILE" ]]; then
-
-    # Update the test title in the infile.in file
-    echo "Updating test title in $INFILE..."
-
-    # Replace the placeholder with the actual test name and ID
-    sed -i "s|(To Be Modified by script, should be the same as test title and test number)|$TEST_NAME (ID: $NEXT_TEST_ID)|g" "$INFILE"
-
-    echo "Test title in $INFILE updated successfully."
-else
-    echo "Warning: infile.in not found in $TEST_PATH/inputs. Skipping updates."
-fi
-
-
-
-# Create metadata
-METADATA_FILE="metadata.yaml"
-cat >"$METADATA_FILE" <<EOF
-test_id: $NEXT_TEST_ID
-test_name: $TEST_NAME
-description: $DESCRIPTION
-reason: $REASON
-parent_test_id: $PARENT_TEST_ID
+    cat >"$metadata_file" <<EOF
+test_id: $test_id
+test_name: $test_name
+description: $description
+reason: $reason
+parent_test_id: null
 date: $(date +'%Y-%m-%d %H:%M:%S')
 EOF
+}
+
+# Function to update infile.in with test details
+update_infile() {
+    local infile="$1"
+    local test_name="$2"
+    local test_id="$3"
+
+    if [[ -f "$infile" ]]; then
+        echo "Updating test title in $infile..."
+        sed -i "s|(To Be Modified by script, should be the same as test title and test number)|$test_name (ID: $test_id)|g" "$infile"
+        echo "Test title updated in $infile."
+    else
+        echo "Warning: infile.in not found in inputs. Skipping updates."
+    fi
+}
+
+# Main function
+main() {
+    # Get the root directory
+    local root_dir
+    root_dir=$(get_root_dir)
+
+    # Retrieve settings from settings.yaml
+    local settings_file="$root_dir/settings.yaml"
+    local tests_dir binaries_dir croco_dir
+    tests_dir="$root_dir/$(yq eval '.project.tests_dir' "$settings_file")"
+    binaries_dir="$root_dir/$(yq eval '.project.binaries_dir' "$settings_file")"
+    croco_dir=$(yq eval '.project.croco_dir' "$settings_file")
+
+    echo -e "\nROOT_DIR=$root_dir"
+    echo "TESTS_DIR=$tests_dir"
+    echo "BINARIES_DIR=$binaries_dir"
+    echo "CROCO_DIR=$croco_dir"
+    echo ""
+
+    # Get the next test ID
+    local next_test_id
+    next_test_id=$(get_next_test_id "$tests_dir")
+
+    # Prompt user for test details (before making any changes)
+    local description reason
+    description=$(prompt_user_input "Enter a short description of the test (e.g., HighDiffusivity_Bio): ")
+    reason=$(prompt_user_input "Enter the reason for creating this test: ")
+
+    # Define test name and paths
+    local test_name="Test${next_test_id}_${description}"
+    local test_path="$tests_dir/$test_name"
+
+    # Check if test already exists
+    if [[ -d "$test_path" ]]; then
+        echo "Error: Test '$test_name' already exists. Please choose a different description."
+        exit 1
+    fi
+
+    #Source the load_configuration script
+    SCRIPT_DIR=$(get_script_dir)
+    source "$SCRIPT_DIR/load_configuration"
+    # set the global variables how they are set in load_configuration
+    TEST_ID=$next_test_id
+    TEST_NAME=$test_name
+    TEST_DIR=$test_path
+
+    prompt_config
 
 
-echo "Test '$TEST_NAME' created successfully."
+    # Confirm test creation
+    echo -e "\nCreating a new test with the following details:"
+    echo "Test ID: $next_test_id"
+    echo "Test Name: $test_name"
+    echo "Description: $description"
+    echo "Reason: $reason"
+    echo "Parent Test: None (independent test)"
+
+    confirm_action "Do you want to proceed with the creation of this test?"
+
+    # Create test directory
+    create_test_directory "$test_path"
+
+    # Create metadata.yaml
+    create_metadata_file "$test_path/metadata.yaml" "$next_test_id" "$test_name" "$description" "$reason"
+
+    copy_files "$SELECTED_RESOLUTION" "$SELECTED_BIO_PHYSICS" "$SELECTED_INITIAL_CONDITION" "$SELECTED_DIFFUSION"
+    cd "$test_path"
+    update_metadata
+
+    # Update infile.in
+    update_infile "$test_path/inputs/infile.in" "$test_name" "$next_test_id"
+
+    echo "Test '$test_name' created successfully."
+}
+
+# Execute main function
+main
