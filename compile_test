@@ -35,6 +35,7 @@ if [[ ! -f "$SETTINGS_FILE" ]]; then
     exit 1
 fi
 
+
 # Read test details from metadata.yaml
 TEST_NAME=$(yq eval '.test_name' "$METADATA_FILE")
 TEST_ID=$(yq eval '.test_id' "$METADATA_FILE")
@@ -50,7 +51,9 @@ if [[ ! -f "$COMPILE_SCRIPT" ]]; then
 fi
 
 # Copy dependencies from the test directory to their respective locations
-DEPENDENCIES=$(yq eval '.dependencies' "$METADATA_FILE")
+
+DEPENDENCIES=$(yq eval 'explode(.) | .dependencies' "$SETTINGS_FILE")
+echo "Dependencies: $DEPENDENCIES"
 DEPENDENCY_COUNT=$(echo "$DEPENDENCIES" | yq eval 'length' -)
 
 DEPENDENCY_HASHES=""
