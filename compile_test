@@ -65,7 +65,7 @@ check_slurm_env() {
 
 # Function to set CPU cores based on the resolution specified in metadata.yaml
 set_cpu_cores_by_resolution() {
-    local resolution=$(get_metadata_value '.Config.resolution' "$METADATA_FILE")
+    local resolution=$(get_metadata_value '.Config.Resolution' "$METADATA_FILE")
     if [[ "$resolution" == "medres" ]]; then
         set_cpu_cores 128
     elif [[ "$resolution" == "hires" ]]; then
