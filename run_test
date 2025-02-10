@@ -26,7 +26,6 @@ TEST_REASON=$(yq eval '.reason' "$METADATA_FILE")
 BINARY_PATH=$(yq eval '.binary_path' "$METADATA_FILE")
 
 # Convert paths to relative format
-REL_BINARY_PATH="./../../Binaries/Test1_Pear"
 REL_INPUT_FILE="inputs/infile.in"
 
 # Check if the binary exists
@@ -85,17 +84,6 @@ get_num_cores() {
     echo "$NUM_CORES"
 }
 
-get_slurm_cores() {
-    AVAILABLE_CORES=512
-    echo "Number of available cores: $AVAILABLE_CORES"
-    read -p "Enter the number of cores to use (multiple of 128 between 128 and $AVAILABLE_CORES): " NUM_CORES
-
-    if [[ ! "$NUM_CORES" =~ ^[0-9]+$ ]] || (( NUM_CORES < 128 )) || (( NUM_CORES > AVAILABLE_CORES )) || (( NUM_CORES % 128 != 0 )); then
-        echo "Error: Invalid number of cores. Please enter a multiple of 128 between 128 and $AVAILABLE_CORES."
-        exit 1
-    fi
-    echo "$NUM_CORES"
-}
 
 get_slurm_walltime() {
     read -p "Enter the number of hours to run the job (1-168): " WALLTIME_HOURS
@@ -117,15 +105,18 @@ case $PARALLEL_MODE in
         "$BINARY_PATH" "$REL_INPUT_FILE"
         ;;
     2)
-        NUM_CORES=$(get_num_cores)
+        # Get number of cores for MPI from metadata.yaml
+        NUM_CORES=$(yq eval '.Config.cpu_cores' "$METADATA_FILE")
         echo "Running test with MPI using mpirun ($NUM_CORES processes)..."
-        mpirun -n "$NUM_CORES" "$REL_BINARY_PATH" "$REL_INPUT_FILE"
+        mpirun -n "$NUM_CORES" "$BINARY_PATH" "$REL_INPUT_FILE"
         ;;
     3)
-        echo "im here"
-        NUM_CORES=$(get_slurm_cores)
+        NUM_CORES=$(yq eval '.Config.cpu_cores' "$METADATA_FILE")
         NUM_NODES=$((NUM_CORES / 128))
         NUM_HOURS=$(get_slurm_walltime)
+        echo "NUM_CORES: $NUM_CORES"
+        echo "NUM_NODES: $NUM_NODES"
+        echo "NUM_HOURS: $NUM_HOURS"
         echo "Running test with MPI using SLURM srun ($NUM_CORES processes)..."
 
         #create the job script
@@ -145,7 +136,7 @@ case $PARALLEL_MODE in
         echo "module load netcdf-fortran/4.6.1" >> "$JOB_SCRIPT"
         echo "module load netcdf-c/4.9.0" >> "$JOB_SCRIPT"
         echo "#Run command" >> "$JOB_SCRIPT"
-        echo "srun $REL_BINARY_PATH $REL_INPUT_FILE | tee outputs/run_test.log" >> "$JOB_SCRIPT"
+        echo "srun $BINARY_PATH $REL_INPUT_FILE | tee outputs/run_test.log" >> "$JOB_SCRIPT"
 
         #submit the job
         sbatch "$JOB_SCRIPT"

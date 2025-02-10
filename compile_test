@@ -3,187 +3,258 @@
 # Ensure the script is run from the test directory
 TEST_DIR="$(pwd)"
 METADATA_FILE="$TEST_DIR/metadata.yaml"
+FULL_METADATA_FILE_PATH="$METADATA_FILE"
 
-# Check if metadata.yaml exists
-if [[ ! -f "$METADATA_FILE" ]]; then
-    echo "Error: metadata.yaml not found in $TEST_DIR."
-    exit 1
-fi
+# Function to check if metadata.yaml exists
+check_metadata_file() {
+    if [[ ! -f "$METADATA_FILE" ]]; then
+        echo "Error: metadata.yaml not found in $TEST_DIR."
+        exit 1
+    fi
+}
 
 # Function to get the root directory of the project by looking for settings.yaml
 get_root_dir() {
-    DIR="$(pwd)"
-    while [[ ! -f "$DIR/settings.yaml" && "$DIR" != "/" ]]; do
-        DIR=$(dirname "$DIR")
+    local dir="$(pwd)"
+    while [[ ! -f "$dir/settings.yaml" && "$dir" != "/" ]]; do
+        dir=$(dirname "$dir")  # Move up one directory level
     done
 
-    if [[ -f "$DIR/settings.yaml" ]]; then
-        echo "$DIR"
+    if [[ -f "$dir/settings.yaml" ]]; then
+        echo "$dir"
     else
         echo "Error: settings.yaml not found in any parent directory."
         exit 1
     fi
 }
 
-# Get the root directory
-ROOT_DIR=$(get_root_dir)
+# Function to get the directory of the current script
+get_script_dir() {
+    echo "$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
+}
 
-# Retrieve settings from settings.yaml
-SETTINGS_FILE="$ROOT_DIR/settings.yaml"
-if [[ ! -f "$SETTINGS_FILE" ]]; then
-    echo "Error: settings.yaml not found at $SETTINGS_FILE."
-    exit 1
-fi
+# Function to source the CPU core setting script
+source_cpu_script() {
+    local script_dir=$(get_script_dir)
+    source "$script_dir/set_cpu_cores"
+}
 
-
-# Read test details from metadata.yaml
-TEST_NAME=$(yq eval '.test_name' "$METADATA_FILE")
-TEST_ID=$(yq eval '.test_id' "$METADATA_FILE")
-BINARIES_DIR="$ROOT_DIR/$(yq eval '.project.binaries_dir' "$SETTINGS_FILE")"
-
-# Retrieve the compile script path from settings.yaml
-COMPILE_SCRIPT="$ROOT_DIR/$(yq eval '.scripts.compile' "$SETTINGS_FILE")"
-
-# Check if the compile script exists
-if [[ ! -f "$COMPILE_SCRIPT" ]]; then
-    echo "Error: Compile script not found at $COMPILE_SCRIPT."
-    exit 1
-fi
-
-#Ask user if we are in the slurm environment
-echo "Are you in the slurm environment? (y/n)"
-read SLURM_ENV  
-
-#if we are in the slurm environment, we need to load the modules
-if [[ "$SLURM_ENV" == "y" ]]; then
-    # Load the required modules
-    module load gcc/9.2.0
-    module load openmpi/4.1.1rc1
-    module load netcdf-fortran/4.6.1
-    module load netcdf-c/4.9.0
-fi
-
-
-# Copy dependencies from the test directory to their respective locations
-
-DEPENDENCIES=$(yq eval 'explode(.) | .dependencies' "$SETTINGS_FILE")
-echo "Dependencies: $DEPENDENCIES"
-DEPENDENCY_COUNT=$(echo "$DEPENDENCIES" | yq eval 'length' -)
-
-DEPENDENCY_HASHES=""
-
-# Calculate hashes for all dependencies
-for ((i = 0; i < DEPENDENCY_COUNT; i++)); do
-    DEPENDENCY_LOCATION=$(echo "$DEPENDENCIES" | yq eval ".[$i].location" -)
-    DEPENDENCY_PATH=$(echo "$DEPENDENCIES" | yq eval ".[$i].path" -)
-    DEPENDENCY_SOURCE="$TEST_DIR/dependencies/$(basename "$DEPENDENCY_PATH")"
-    DEPENDENCY_DESTINATION="$DEPENDENCY_LOCATION/$DEPENDENCY_PATH"
-
-    # Check if the dependency exists in the test directory
-    if [[ ! -f "$DEPENDENCY_SOURCE" ]]; then
-        echo "Error: Dependency not found at $DEPENDENCY_SOURCE."
+# Function to retrieve the settings.yaml file path from the root directory
+get_settings_file() {
+    local root_dir=$1
+    local settings_file="$root_dir/settings.yaml"
+    if [[ ! -f "$settings_file" ]]; then
+        echo "Error: settings.yaml not found at $settings_file."
         exit 1
     fi
+    echo "$settings_file"
+}
 
-    # Calculate the hash of the dependency file
-    DEPENDENCY_HASH=$(sha256sum "$DEPENDENCY_SOURCE" | cut -d ' ' -f 1)
+# Function to retrieve a value from metadata.yaml using yq
+get_metadata_value() {
+    local key=$1
+    local metadata_file=$2
+    yq eval "$key" "$metadata_file"
+}
 
-    # Store the hash and path
-    DEPENDENCY_HASHES="$DEPENDENCY_HASHES $DEPENDENCY_PATH:$DEPENDENCY_HASH"
-    
-    # Copy the dependency to its destination
-    mkdir -p "$(dirname "$DEPENDENCY_DESTINATION")"
-    cp "$DEPENDENCY_SOURCE" "$DEPENDENCY_DESTINATION"
-done
+# Function to check if the script is running in a Slurm environment
+check_slurm_env() {
+    read -p "Are you in the slurm environment? (y/n): " slurm_env  
+    echo "$slurm_env"
+}
 
-# Check if an existing binary matches ALL dependency hashes
-EXISTING_BINARY=""
-MATCHING_BINARY_FOUND=false
+# Function to set CPU cores based on the resolution specified in metadata.yaml
+set_cpu_cores_by_resolution() {
+    local resolution=$(get_metadata_value '.Config.resolution' "$METADATA_FILE")
+    if [[ "$resolution" == "medres" ]]; then
+        set_cpu_cores 128
+    elif [[ "$resolution" == "hires" ]]; then
+        set_cpu_cores 512
+    fi
+}
 
-for BINARY_HASH_FILE in "$BINARIES_DIR"/*.hashes; do
-    if [[ -f "$BINARY_HASH_FILE" ]]; then
-        # Read the hashes from the existing binary's companion file
-        EXISTING_HASHES=$(cat "$BINARY_HASH_FILE")
-
-        # Check if ALL current dependency hashes match the existing binary's hashes
-        ALL_MATCH=true
-        for DEPENDENCY_HASH in $DEPENDENCY_HASHES; do
-            if [[ ! "$EXISTING_HASHES" =~ "$DEPENDENCY_HASH" ]]; then
-                ALL_MATCH=false
-                break
-            fi
-        done
-
-        # If all hashes match, use this binary
-        if [[ "$ALL_MATCH" == true ]]; then
-            EXISTING_BINARY="$BINARY_HASH_FILE"
-            MATCHING_BINARY_FOUND=true
+# Function to manually select the number of CPU cores if not in Slurm
+manual_cpu_core_selection() {
+    local total_cores=$(nproc --all)  # Get total available CPU cores
+    local cpu_cores
+    while :; do
+        read -p "Enter the number of CPU cores to use: " cpu_cores
+        if [[ "$cpu_cores" -le "$total_cores" ]]; then
+            process_cores "$cpu_cores"
             break
+        else
+            echo "Error: The number of CPU cores must be <= $total_cores."
         fi
+    done
+}
+
+# Function to handle dependencies defined in settings.yaml
+handle_dependencies() {
+    local settings_file=$1
+    local dependencies=$(yq eval 'explode(.) | .dependencies' "$settings_file")
+    local dependency_count=$(echo "$dependencies" | yq eval 'length' -)
+    local dependency_hashes=""
+    
+    for ((i = 0; i < dependency_count; i++)); do
+        local dep_location=$(echo "$dependencies" | yq eval ".[$i].location" -)
+        local dep_path=$(echo "$dependencies" | yq eval ".[$i].path" -)
+        local dep_source="$TEST_DIR/dependencies/$(basename "$dep_path")"
+        local dep_dest="$dep_location/$dep_path"
+        
+        if [[ ! -f "$dep_source" ]]; then
+            echo "Error: Dependency not found at $dep_source."
+            exit 1
+        fi
+        
+        # Compute hash of the dependency file
+        local dep_hash=$(sha256sum "$dep_source" | cut -d ' ' -f 1)
+        dependency_hashes+="$dep_path:$dep_hash "
+        mkdir -p "$(dirname "$dep_dest")"
+        cp "$dep_source" "$dep_dest"
+    done
+    
+    echo "$dependency_hashes"
+}
+
+find_existing_binary() {
+    local bins_dir=$1
+    local dep_hashes="$2"
+    local found_hash_file=""
+    local warning_message=""  # Store warning messages
+
+    for bin_hash_file in "$bins_dir"/*.hashes; do
+        if [[ -f "$bin_hash_file" ]]; then
+            local existing_hashes=$(cat "$bin_hash_file")
+            local all_match=true
+
+            for hash in $dep_hashes; do
+                if [[ ! "$existing_hashes" =~ "$hash" ]]; then
+                    all_match=false
+                    break
+                fi
+            done
+
+            if [[ "$all_match" == true ]]; then
+                local binary_path="${bin_hash_file%.hashes}"
+                if [[ -f "$binary_path" ]]; then
+                    found_hash_file="$bin_hash_file"
+                    break
+                else
+                    warning_message+="Warning: Hash file found, but corresponding binary '$binary_path' is missing. Recompiling." # Append to warning message
+                fi
+            fi
+        fi
+    done
+
+    if [[ -n "$warning_message" ]]; then  # Print warning message *outside* the function's main output
+        echo "$warning_message" >&2  # Send warning to stderr
     fi
-done
 
-if [[ "$MATCHING_BINARY_FOUND" == true ]]; then
-    # If the binary exists and all hashes match, just copy and rename it
-    EXISTING_BINARY_PATH="${EXISTING_BINARY%.hashes}"
+    if [[ -n "$found_hash_file" ]]; then
+        echo "$found_hash_file"  # Only return the hash file if the binary exists
+    else
+        echo ""
+    fi
+}
 
-    BINARY_DESTINATION="$BINARIES_DIR/$TEST_NAME"
+# Function to compile the binary if no matching binary is found
+compile_binary() {
+    local root_dir=$1
+    local compile_script=$2
+    local debug_flag=$3  # Add a debug flag argument
 
-    # Check if the source and destination are the same
-    if [[ "$EXISTING_BINARY_PATH" != "$BINARY_DESTINATION" ]]; then
-        cp "$EXISTING_BINARY_PATH" "$BINARY_DESTINATION"
-        cp "$EXISTING_BINARY" "$BINARY_DESTINATION.hashes"
+    cd "$root_dir" || exit 1
+
+    if [[ -n "$debug_flag" ]]; then  # Check if debug flag is set
+        "$compile_script"        # Run with output if debug is on
+    else
+        echo "Compiling binary..."
+        "$compile_script" > /dev/null 2>&1  # Suppress output if debug is off
     fi
 
-    # Update the metadata to point to the new binary
-    yq eval ".binary_path = \"$BINARY_DESTINATION\"" -i "$METADATA_FILE"
-
-    echo "Binary already exists with matching dependencies. Skipping compilation and using the existing binary."
-else
-    # If no matching binary is found, proceed with the compilation
-    cd "$ROOT_DIR"  # Ensure we are in the root directory for compilation
-    "$COMPILE_SCRIPT"
-
-    # Check if the compilation was successful
     if [[ $? -ne 0 ]]; then
         echo "Error: Compilation failed."
         exit 1
     fi
+}
 
-    # Define the name of the compiled binary
-    COMPILED_BINARY_NAME="croco"  # Replace with the actual name of the compiled binary
-    COMPILED_BINARY_PATH="$ROOT_DIR/$COMPILED_BINARY_NAME"
+# Function to clean up temporary files after compilation
+cleanup_files() {
+    local root_dir=$1
+    rm -rf "$root_dir/Compile" "$root_dir/MUSTANG_NAMELIST"
+    rm -f "$root_dir/croco.in" "$root_dir/kRGB61.txt" "$root_dir/kRGB61.txt.1"
+    rm -f "$root_dir/namelist_pisces_cfg" "$root_dir/namelist_pisces_cfg.1"
+    rm -f "$root_dir/namelist_pisces_ref" "$root_dir/namelist_pisces_ref.1"
+    rm -f "$root_dir/ncjoin" "$root_dir/partit"
+}
 
-    # Check if the compiled binary exists
-    if [[ ! -f "$COMPILED_BINARY_PATH" ]]; then
-        echo "Error: Compiled binary not found at $COMPILED_BINARY_PATH."
+#unset parallel file writint
+unset_parallel_file() {
+    local local_test_dir=$1
+    local cppdefs_file="$local_test_dir/dependencies/cppdefs.h"
+
+    #check if the file exists
+    if [[ ! -f "$cppdefs_file" ]]; then
+        echo "Error: cppdefs.h file not found at $cppdefs_file."
         exit 1
     fi
 
-    # Move and rename the binary to the binaries directory
-    BINARY_DESTINATION="$BINARIES_DIR/$TEST_NAME"
-    mv "$COMPILED_BINARY_PATH" "$BINARY_DESTINATION"
+    echo "Unsetting parallel file..."
 
-    # Create a companion file to store the dependency hashes
-    COMPANION_FILE="$BINARY_DESTINATION.hashes"
-    echo "$DEPENDENCY_HASHES" > "$COMPANION_FILE"
+    # Find the line containing NC4PAR
+    line=$(awk '/NC4PAR/ {print NR}' "$cppdefs_file")
 
-    # Update the metadata to include the binary path
-    yq eval ".binary_path = \"$BINARY_DESTINATION\"" -i "$METADATA_FILE"
+    # Check if a line was found
+    if [[ -n "$line" ]]; then
+        #change define to undef
+        sed -i "${line}s/define/undef/" "$cppdefs_file"
 
-    echo "Binary compiled and associated with the test successfully."
+    else
+        echo "Error: NC4PAR not found in cppdefs.h."
+        exit 1
+    fi
+}
 
-    # Cleanup: Remove generated files and folders
-    echo "Cleaning up generated files and folders..."
-    rm -rf "$ROOT_DIR/Compile"
-    rm -rf "$ROOT_DIR/MUSTANG_NAMELIST"
-    rm -f "$ROOT_DIR/croco.in"
-    rm -f "$ROOT_DIR/kRGB61.txt"
-    rm -f "$ROOT_DIR/kRGB61.txt.1"
-    rm -f "$ROOT_DIR/namelist_pisces_cfg"
-    rm -f "$ROOT_DIR/namelist_pisces_cfg.1"
-    rm -f "$ROOT_DIR/namelist_pisces_ref"
-    rm -f "$ROOT_DIR/namelist_pisces_ref.1"
-    rm -f "$ROOT_DIR/ncjoin"
-    rm -f "$ROOT_DIR/partit"
+# Main script execution
+# *** Corrected Argument Parsing (Crucial Fix) ***
+debug_flag=""
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -d) debug_flag="-d"; shift ;;  # Set debug flag and remove it
+        *) break ;;  # Exit loop if not a flag
+    esac
+done
+
+check_metadata_file
+ROOT_DIR=$(get_root_dir)
+SETTINGS_FILE=$(get_settings_file "$ROOT_DIR")
+source_cpu_script
+SLURM_ENV=$(check_slurm_env)
+
+if [[ "$SLURM_ENV" == "y" ]]; then
+    module load gcc/9.2.0 openmpi/4.1.1rc1 netcdf-fortran/4.6.1 netcdf-c/4.9.0
+    set_cpu_cores_by_resolution
+else
+    unset_parallel_file "$TEST_DIR"
+    manual_cpu_core_selection
+fi
+
+DEPENDENCY_HASHES=$(handle_dependencies "$SETTINGS_FILE")
+BINARIES_DIR="$ROOT_DIR/$(get_metadata_value '.project.binaries_dir' "$SETTINGS_FILE")"
+BINARY_DESTINATION="$BINARIES_DIR/$(get_metadata_value '.test_name' "$METADATA_FILE")"
+EXISTING_BINARY=$(find_existing_binary "$BINARIES_DIR" "$DEPENDENCY_HASHES")
+
+
+if [[ -n "$EXISTING_BINARY" ]]; then
+    EXISTING_BINARY_PATH="${EXISTING_BINARY%.hashes}"
+    yq eval ".binary_path = \"$EXISTING_BINARY_PATH\"" -i "$METADATA_FILE"
+    echo "Using existing binary."
+else
+    COMPILE_SCRIPT="$ROOT_DIR/$(get_metadata_value '.scripts.compile' "$SETTINGS_FILE")"
+    compile_binary "$ROOT_DIR" "$COMPILE_SCRIPT" "$debug_flag"
+    mv "$ROOT_DIR/croco" "$BINARY_DESTINATION"
+    echo "$DEPENDENCY_HASHES" > "$BINARY_DESTINATION.hashes"
+    yq eval ".binary_path = \"$BINARY_DESTINATION\"" -i "$FULL_METADATA_FILE_PATH"
+    echo "Binary compiled successfully."
+    cleanup_files "$ROOT_DIR"
 fi
