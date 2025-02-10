@@ -50,6 +50,20 @@ if [[ ! -f "$COMPILE_SCRIPT" ]]; then
     exit 1
 fi
 
+#Ask user if we are in the slurm environment
+echo "Are you in the slurm environment? (y/n)"
+read SLURM_ENV  
+
+#if we are in the slurm environment, we need to load the modules
+if [[ "$SLURM_ENV" == "y" ]]; then
+    # Load the required modules
+    module load gcc/9.2.0
+    module load openmpi/4.1.1rc1
+    module load netcdf-fortran/4.6.1
+    module load netcdf-c/4.9.0
+fi
+
+
 # Copy dependencies from the test directory to their respective locations
 
 DEPENDENCIES=$(yq eval 'explode(.) | .dependencies' "$SETTINGS_FILE")
