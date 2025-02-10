@@ -241,7 +241,7 @@ fi
 
 DEPENDENCY_HASHES=$(handle_dependencies "$SETTINGS_FILE")
 BINARIES_DIR="$ROOT_DIR/$(get_metadata_value '.project.binaries_dir' "$SETTINGS_FILE")"
-BINARY_DESTINATION="$BINARIES_DIR/$(get_metadata_value '.test_name' "$METADATA_FILE")"
+BINARY_DESTINATION="$BINARIES_DIR/$(get_metadata_value '.test_name' "$METADATA_FILE")_$(get_metadata_value '.test_id' "$METADATA_FILE")"
 EXISTING_BINARY=$(find_existing_binary "$BINARIES_DIR" "$DEPENDENCY_HASHES")
 
 
