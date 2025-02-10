@@ -87,15 +87,16 @@ get_num_cores() {
 
 get_slurm_cores() {
     AVAILABLE_CORES=512
-    echo "Number of available cores: $AVAILABLE_CORES"
-    read -p "Enter the number of cores to use (multiple of 128 between 128 and $AVAILABLE_CORES): " NUM_CORES
+    read -p "" NUM_CORES  # Read input without extra prompt messages
 
     if [[ ! "$NUM_CORES" =~ ^[0-9]+$ ]] || (( NUM_CORES < 128 )) || (( NUM_CORES > AVAILABLE_CORES )) || (( NUM_CORES % 128 != 0 )); then
-        echo "Error: Invalid number of cores. Please enter a multiple of 128 between 128 and $AVAILABLE_CORES."
+        echo "Error: Invalid number of cores. Please enter a multiple of 128 between 128 and $AVAILABLE_CORES." >&2
         exit 1
     fi
+
     echo "$NUM_CORES"
 }
+
 
 get_slurm_walltime() {
     read -p "Enter the number of hours to run the job (1-168): " WALLTIME_HOURS
