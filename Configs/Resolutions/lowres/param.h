@@ -183,7 +183,7 @@
 # elif defined  BENGUELA_VHR
       parameter (LLm0=167,  MMm0=170,  N=32)   ! BENGUELA_VHR
 # else
-      parameter (LLm0=768,   MMm0=640,   N=32)                 ! CAPSTONE CONFIG
+      parameter (LLm0=48,   MMm0=40,   N=32)                 ! CAPSTONE CONFIG
 # endif
 #elif defined COASTAL 
 # if defined VILAINE
@@ -226,7 +226,7 @@
       parameter (NPP=1)
       parameter (NSUB_X=1, NSUB_E=1)
 #elif defined OPENMP
-      parameter (NPP=32)
+      parameter (NPP=64)
 # ifdef AUTOTILING
       common/distrib/NSUB_X, NSUB_E
 # else

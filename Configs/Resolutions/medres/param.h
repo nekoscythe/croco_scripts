@@ -183,7 +183,7 @@
 # elif defined  BENGUELA_VHR
       parameter (LLm0=167,  MMm0=170,  N=32)   ! BENGUELA_VHR
 # else
-      parameter (LLm0=768,   MMm0=640,   N=32)                 ! CAPSTONE CONFIG
+      parameter (LLm0=192,   MMm0=160,   N=32)                 ! CAPSTONE CONFIG
 # endif
 #elif defined COASTAL 
 # if defined VILAINE
