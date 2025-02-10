@@ -86,7 +86,7 @@ get_num_cores() {
 }
 
 get_slurm_cores() {
-    AVAILABLE_CORES=$(512)
+    AVAILABLE_CORES=512
     echo "Number of available cores: $AVAILABLE_CORES"
     read -p "Enter the number of cores to use (multiple of 128 between 128 and $AVAILABLE_CORES): " NUM_CORES
 
