@@ -15,7 +15,7 @@ find_root_dir() {
     fi
 }
 
-# Function to recursively build the test tree
+# Function to recursively build the test tree with color-coded statuses
 build_test_tree() {
     local DIR="$1"
     local PREFIX="$2"
@@ -30,20 +30,38 @@ build_test_tree() {
         return
     fi
 
-    # Display the test name and ID
-    if [[ "$IS_LAST" == "true" ]]; then
-        echo "${PREFIX}└──  (ID: $TEST_ID) $TEST_NAME"
+    # Determine test status
+    local LOG_FILE="$DIR/outputs/run_test.log"
+    local STATUS_COLOR=""
+    local STATUS=""
+
+    if [[ ! -f "$LOG_FILE" ]]; then
+        STATUS_COLOR="\e[33m"  # Yellow (Not Run)
+        STATUS="[Not Run]"
     else
-        echo "${PREFIX}├──  (ID: $TEST_ID) $TEST_NAME"
+        LAST_LINE=$(tail -n 1 "$LOG_FILE")
+        if [[ "$LAST_LINE" =~ ^Error ]]; then
+            STATUS_COLOR="\e[31m"  # Red (Failed)
+            STATUS="[Failed]"
+        else
+            STATUS_COLOR="\e[32m"  # Green (Passed)
+            STATUS="[Passed]"
+        fi
     fi
 
-    # Find all subtests (child directories)
+    # Print test entry with color
+    if [[ "$IS_LAST" == "true" ]]; then
+        echo -e "${PREFIX}└── ${STATUS_COLOR}(ID: $TEST_ID) $TEST_NAME $STATUS\e[0m"
+    else
+        echo -e "${PREFIX}├── ${STATUS_COLOR}(ID: $TEST_ID) $TEST_NAME $STATUS\e[0m"
+    fi
+
+    # Find and display subtests
     local SUBTESTS_DIR="$DIR/subtests"
     if [[ -d "$SUBTESTS_DIR" ]]; then
         local SUBTESTS=("$SUBTESTS_DIR"/*)
         local SUBTESTS_WITH_METADATA=()
 
-        # Collect all subtests and their metadata
         for SUBTEST in "${SUBTESTS[@]}"; do
             if [[ -d "$SUBTEST" ]]; then
                 local SUBTEST_METADATA_FILE="$SUBTEST/metadata.yaml"
@@ -55,11 +73,9 @@ build_test_tree() {
             fi
         done
 
-        # Sort the subtests by test ID
         IFS=$'\n' sorted_subtests=($(for subtest in "${SUBTESTS_WITH_METADATA[@]}"; do echo "$subtest"; done | sort -t '|' -k3))
         unset IFS
 
-        # Iterate over sorted subtests and display them
         local COUNT=${#sorted_subtests[@]}
         local INDEX=0
 
@@ -74,6 +90,7 @@ build_test_tree() {
         done
     fi
 }
+
 
 # Function to display the test tree
 show_test_tree() {

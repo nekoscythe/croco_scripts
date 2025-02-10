@@ -1,0 +1,18 @@
+#!/bin/bash
+
+update_infile() {
+    local infile="$1"
+    local test_name="$2"
+    local test_id="$3"
+
+    if [[ -f "$infile" ]]; then
+        echo "Updating test title in $infile..."
+        sed -i "s|(To Be Modified by script, should be the same as test title and test number)|$test_name (ID: $test_id)|g" "$infile"
+        echo "Test title updated in $infile."
+    else
+        echo "Warning: infile.in not found in inputs. Skipping updates."
+    fi
+}
+
+test_path=$(pwd)
+update_infile "$test_path/inputs/infile.in" "Test Title" "1234"
