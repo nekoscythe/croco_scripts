@@ -16,6 +16,7 @@ find_root_dir() {
 }
 
 # Function to recursively build the test tree with color-coded statuses
+# Function to recursively build the test tree with color-coded statuses
 build_test_tree() {
     local DIR="$1"
     local PREFIX="$2"
@@ -39,10 +40,16 @@ build_test_tree() {
         STATUS_COLOR="\e[33m"  # Yellow (Not Run)
         STATUS="[Not Run]"
     else
-        LAST_LINE=$(tail -n 1 "$LOG_FILE")
+        local LAST_LINE=$(tail -n 1 "$LOG_FILE")
+        local HAS_EXECUTION_STARTED=$(grep -q "started time-stepping" "$LOG_FILE" && echo "yes" || echo "no")
+        local HAS_EXECUTION_COMPLETED=$(grep -q "MAIN: DONE" "$LOG_FILE" && echo "yes" || echo "no")
+
         if [[ "$LAST_LINE" =~ ^Error ]]; then
             STATUS_COLOR="\e[31m"  # Red (Failed)
             STATUS="[Failed]"
+        elif [[ "$HAS_EXECUTION_STARTED" == "yes" && "$HAS_EXECUTION_COMPLETED" == "no" ]]; then
+            STATUS_COLOR="\e[35m"  # Magenta (Interrupted)
+            STATUS="[Interrupted]"
         else
             STATUS_COLOR="\e[32m"  # Green (Passed)
             STATUS="[Passed]"
@@ -90,6 +97,7 @@ build_test_tree() {
         done
     fi
 }
+
 
 
 # Function to display the test tree
