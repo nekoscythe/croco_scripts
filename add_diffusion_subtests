@@ -1,66 +1,50 @@
 #!/bin/bash
 # Creates standard diffusion subtests for the current test
 
-
 get_root_dir() {
-    DIR="$(pwd)"
-    while [[ ! -f "$DIR/settings.yaml" && "$DIR" != "/" ]]; do
-        DIR=$(dirname "$DIR")
+    local dir="$(pwd)"
+    while [[ ! -f "$dir/settings.yaml" && "$dir" != "/" ]]; do
+        dir=$(dirname "$dir")
     done
 
-    if [[ -f "$DIR/settings.yaml" ]]; then
-        echo "$DIR"
+    if [[ -f "$dir/settings.yaml" ]]; then
+        echo "$dir"
     else
-        echo "Error: Root directory not found. Ensure settings.yaml exists in the project root."
-        exit 1
+        echo "Error: Root directory not found. Ensure settings.yaml exists in the project root." >&2
+        return 1
     fi
 }
 
-# Inherit project settings
-ROOT_DIR=$(get_root_dir)
-CONFIG_DIR="$ROOT_DIR/configs/diffusion_versions"
-
-# Validate current directory
-if [[ ! -f "metadata.yaml" ]]; then
-    echo "Error: Run this from a test directory containing metadata.yaml"
-    exit 1
-fi
-
-# Define configurations
-declare -A CONFIGS=(
-    ["Control"]="no_horizontal_diffusion"
-    ["EHDA"]="enhanced_diffusion_all_fields"
-    ["EHDB"]="enhanced_diffusion_biological_only"
-)
-
-ORDER=("Control" "EHDA" "EHDB")
-
-# Create subtests
-for CONFIG_NAME in "${ORDER[@]}"; do
-    DESCRIPTION="${CONFIGS[$CONFIG_NAME]}"
-    CONFIG_SOURCE="$CONFIG_DIR/$CONFIG_NAME/t3dmix_S.F"
+create_diffusion_subtests() {
+    local root_dir=$(get_root_dir) || return 1
     
-    # Validate config file exists
-    if [[ ! -f "$CONFIG_SOURCE" ]]; then
-        echo "Error: Missing configuration file for $CONFIG_NAME"
-        echo "Expected at: $CONFIG_SOURCE"
-        exit 1
+    if [[ ! -f "metadata.yaml" ]]; then
+        echo "Error: Run this from a test directory containing metadata.yaml" >&2
+        return 1
     fi
-
-    # Create subtest using existing branch mechanism
-    echo "Creating $CONFIG_NAME subtest..."
-    echo "y" | add_branch -q "$CONFIG_NAME"
     
-    # Copy the appropriate T3dmix version
-    SUBTEST_PATH="subtests/$CONFIG_NAME"
-    cp "$CONFIG_SOURCE" "$SUBTEST_PATH/dependencies/t3dmix_S.F"
+    declare -A configs=(
+        ["Control"]="no_horizontal_diffusion"
+        ["EHDA"]="enhanced_diffusion_all_fields"
+        ["EHDB"]="enhanced_diffusion_biological_only"
+    )
     
-    # Update metadata
-    yq eval ".diffusion_config = \"$CONFIG_NAME\"" -i "$SUBTEST_PATH/metadata.yaml"
-    yq eval ".description = \"$DESCRIPTION\"" -i "$SUBTEST_PATH/metadata.yaml"
-done
+    local order=("Control" "EHDA" "EHDB")
+    
+    for config_name in "${order[@]}"; do
+        local description="${configs[$config_name]}"
+        
+        
+        echo "Creating $config_name subtest..."
+        echo "y" | add_branch -q "$config_name"
+        
+        local subtest_path="subtests/$config_name"
+        
+        yq eval ".diffusion_config = \"$config_name\"" -i "$subtest_path/metadata.yaml"
+        yq eval ".description = \"$description\"" -i "$subtest_path/metadata.yaml"
+    done
+}
 
-echo "Created 3 diffusion subtests:"
-echo "1. Control (baseline)"
-echo "2. EHDA (diffusion enhanced all fields)"
-echo "3. EHDB (diffusion enhanced biological fields)"
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+    create_diffusion_subtests
+fi

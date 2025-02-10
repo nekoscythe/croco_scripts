@@ -46,24 +46,16 @@ prompt_config() {
     echo "Invalid selection. Please choose a valid option."
   done
 
-  echo -e "\n\033[1;33mSelect Diffusion Setting:\033[0m"
-  select diffusion in "${diffusion_settings[@]}"; do
-    [[ -n "$diffusion" ]] && break
-    echo "Invalid selection. Please choose a valid option."
-  done
-
   # Store selected options
   SELECTED_RESOLUTION="$resolution"
   SELECTED_BIO_PHYSICS="$bio_physics"
   SELECTED_INITIAL_CONDITION="$initial_condition"
-  SELECTED_DIFFUSION="$diffusion"
 
   # Confirm selection
   echo -e "\n\033[1;34m--- Selected Configuration ---\033[0m"
   echo -e "  Resolution: \033[1;32m$SELECTED_RESOLUTION\033[0m"
   echo -e "  Model Type: \033[1;32m$SELECTED_BIO_PHYSICS\033[0m"
   echo -e "  Initial Condition: \033[1;32m$SELECTED_INITIAL_CONDITION\033[0m"
-  echo -e "  Diffusion Setting: \033[1;32m$SELECTED_DIFFUSION\033[0m"
   
   while true; do
     read -r -p "Confirm configuration? (y/n): " confirm
@@ -83,7 +75,6 @@ copy_files() {
   local resolution="$1"
   local bio_physics="$2"
   local initial_condition="$3"
-  local diffusion="$4"
 
   echo -e "\n\033[1;34m--- Copying Configuration Files ---\033[0m"
 
@@ -100,7 +91,6 @@ copy_files() {
   
   local restart_src=$(yq e ".InitialConditions.\"$initial_condition\".input_rst_$resolution" "$CONFIG_FILE" 2>/dev/null)
   local description_src=$(yq e ".InitialConditions.\"$initial_condition\".Description" "$CONFIG_FILE" 2>/dev/null)
-  local diffusion_src=$(yq e ".Diffusion.\"$diffusion\".t3dmix_S" "$CONFIG_FILE" 2>/dev/null)
 
   # Create symbolic links or copy files
   [[ -n "$grid_src" ]] && ln -sf "$CONFIG_DIR/$grid_src" "$TEST_DIR/${file_dests["Grid"]}"
@@ -110,12 +100,33 @@ copy_files() {
   [[ -n "$param_src" ]] && cp "$CONFIG_DIR/$param_src" "$TEST_DIR/${file_dests["Param"]}"
 
   [[ -n "$description_src" ]] && cp "$CONFIG_DIR/$description_src" "$TEST_DIR/${file_dests["ConfigDescription"]}"
-  [[ -n "$diffusion_src" ]] && cp "$CONFIG_DIR/$diffusion_src" "$TEST_DIR/${file_dests["Diffusion"]}"
   [[ -n "$infile_src" ]] && cp "$CONFIG_DIR/$infile_src" "$TEST_DIR/${file_dests["Infile"]}"
 
 
 
   echo -e "\033[1;32mConfiguration files successfully copied!\033[0m"
+}
+
+copy_diffusion_files() {
+  local diffusion="$1"
+  local test_dir_local="$2"
+
+  declare -A file_dests
+  while IFS=':' read -r key value; do
+    file_dests["${key}"]="${value}"
+  done < <(yq e ".FileDestinations | to_entries | .[] | .key + \":\" + .value" "$CONFIG_FILE")
+
+  local diffusion_src=$(yq e ".Diffusion.\"$diffusion\".t3dmix_S" "$CONFIG_FILE" 2>/dev/null)
+
+  [[ -n "$diffusion_src" ]] && cp "$CONFIG_DIR/$diffusion_src" "$test_dir_local/${file_dests["Diffusion"]}"
+
+}
+
+update_diffusion_metadata() {
+  local diffusion="$1"
+  local metadata_file="$2"
+
+  yq e ".Config.DiffusionSetting = \"$diffusion\"" -i "$metadata_file"
 }
 
 # Function to edit metadata.yaml to include the configuration details
@@ -125,7 +136,6 @@ update_metadata() {
   yq e ".Config.Resolution = \"$SELECTED_RESOLUTION\"" -i "$metadata_file"
   yq e ".Config.ModelType = \"$SELECTED_BIO_PHYSICS\"" -i "$metadata_file"
   yq e ".Config.InitialCondition = \"$SELECTED_INITIAL_CONDITION\"" -i "$metadata_file"
-  yq e ".Config.DiffusionSetting = \"$SELECTED_DIFFUSION\"" -i "$metadata_file"
 
   echo -e "\n\033[1;32mMetadata updated with configuration details.\033[0m"
 
@@ -136,7 +146,7 @@ update_metadata() {
 setup_configuration() {
   check_metadata
   prompt_config
-  copy_files "$SELECTED_RESOLUTION" "$SELECTED_BIO_PHYSICS" "$SELECTED_INITIAL_CONDITION" "$SELECTED_DIFFUSION"
+  copy_files "$SELECTED_RESOLUTION" "$SELECTED_BIO_PHYSICS" "$SELECTED_INITIAL_CONDITION"
   update_metadata
 }
 

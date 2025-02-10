@@ -2,105 +2,125 @@
 
 QUIET=false
 
-# Parse arguments
-while [[ "$1" =~ ^- && ! "$1" == "--" ]]; do
-    case $1 in
-        -q | --quiet)
-            QUIET=true
-            ;;
-    esac
-    shift
-done
-
-# Ensure a branch name is provided
-if [[ -z "$1" ]]; then
-    [[ "$QUIET" == false ]] && echo "Error: Missing branch test name."
-    exit 1
-fi
-
-BRANCH_TEST_NAME="$1"
-
-# Function to get the root directory of the project by looking for settings.yaml
-get_root_dir() {
-    DIR="$(pwd)"
-    while [[ ! -f "$DIR/settings.yaml" && "$DIR" != "/" ]]; do
-        DIR=$(dirname "$DIR")
+# Function to parse arguments
+parse_arguments() {
+    while [[ "$1" =~ ^- && ! "$1" == "--" ]]; do
+        case $1 in
+            -q | --quiet)
+                QUIET=true
+                ;;
+        esac
+        shift
     done
 
-    if [[ -f "$DIR/settings.yaml" ]]; then
-        echo "$DIR"
+    if [[ -z "$1" ]]; then
+        error "Missing branch test name."
+    fi
+
+    echo "$1"
+}
+
+# Function to print error messages
+error() {
+    [[ "$QUIET" == false ]] && echo "Error: $1"
+    exit 1
+}
+
+# Function to get the root directory
+get_root_dir() {
+    local dir="$(pwd)"
+    while [[ ! -f "$dir/settings.yaml" && "$dir" != "/" ]]; do
+        dir=$(dirname "$dir")
+    done
+
+    [[ -f "$dir/settings.yaml" ]] || error "Root directory not found."
+    echo "$dir"
+}
+
+# Function to validate branch name
+validate_branch_name() {
+    [[ "$1" =~ ^[a-zA-Z0-9_-]+$ ]] || error "Invalid branch test name."
+}
+
+# Function to check metadata.yaml
+validate_metadata() {
+    [[ -f "metadata.yaml" ]] || error "No metadata.yaml file found."
+    
+    local test_name test_id
+    test_name=$(yq eval '.test_name' metadata.yaml)
+    test_id=$(yq eval '.test_id' metadata.yaml)
+    [[ -n "$test_name" && -n "$test_id" ]] || error "Could not find valid test_name or test_id."
+    
+    echo "$test_name" "$test_id"
+}
+
+# Function to create a new branch test
+test_exists() {
+    [[ -d "$1" ]] && error "Branch test already exists."
+}
+
+# Function to update infile.in with test details
+update_infile() {
+    local infile="$1"
+    local test_id="$2"
+    local branch_name="$3"
+
+    if [[ -f "$infile" ]]; then
+        echo "Updating test title in $infile..."
+        #in line 2, replace the ID with the new ID
+        sed -i "2s/ID: [a-zA-Z0-9_-]*/ID: $test_id/" "$infile"
+        #in line 2, append the branch_name, preceded by " | " to separate from the parent description
+        sed -i "2s/$/ | $branch_name/" "$infile"
+        echo "Test title updated in $infile."
     else
-        [[ "$QUIET" == false ]] && echo "Error: Root directory not found."
-        exit 1
+        echo "Warning: infile.in not found in inputs. Skipping updates."
     fi
 }
 
-# Function to add a branch (subtest)
-add_branch() {
-    if [[ ! "$BRANCH_TEST_NAME" =~ ^[a-zA-Z0-9_-]+$ ]]; then
-        [[ "$QUIET" == false ]] && echo "Error: Invalid branch test name."
-        exit 1
-    fi
+create_branch() {
+    local branch_name="$1"
+    local parent_name="$2"
+    local parent_id="$3"
+    local subtests_dir="subtests"
+    local branch_path="$subtests_dir/$branch_name"
+    local existing_count=$(ls -1 "$subtests_dir" 2>/dev/null | wc -l)
+    local suffix=$(printf "\\$(printf '%03o' $((97 + existing_count)))")
+    local branch_id="${parent_id}${suffix}"
+    local outputs_dir="outputs/$branch_name"
 
-    if [[ ! -f "metadata.yaml" ]]; then
-        [[ "$QUIET" == false ]] && echo "Error: No metadata.yaml file found."
-        exit 1
-    fi
-
-    PARENT_TEST_NAME=$(yq eval '.test_name' metadata.yaml)
-    PARENT_TEST_ID=$(yq eval '.test_id' metadata.yaml)
-    if [[ -z "$PARENT_TEST_NAME" || -z "$PARENT_TEST_ID" ]]; then
-        [[ "$QUIET" == false ]] && echo "Error: Could not find valid test_name or test_id."
-        exit 1
-    fi
-
-    SUBTESTS_DIR="subtests"
-    BRANCH_TEST_PATH="$SUBTESTS_DIR/$BRANCH_TEST_NAME"
-
-    if [[ -d "$BRANCH_TEST_PATH" ]]; then
-        [[ "$QUIET" == false ]] && echo "Error: Branch test already exists."
-        exit 1
-    fi
-
-    EXISTING_SUBTESTS_COUNT=$(ls -1 "$SUBTESTS_DIR" 2>/dev/null | wc -l)
-
-    echo "Creating branch test '$BRANCH_TEST_NAME' inside '$PARENT_TEST_NAME'."
+    test_exists "$branch_path"
 
     if [[ "$QUIET" == false ]]; then
-        echo "Full path: $(pwd)/$BRANCH_TEST_PATH"
-        read -p "Proceed? (y/n): " CONFIRM
-        if [[ ! "$CONFIRM" =~ ^[Yy]$ ]]; then
-            echo "Branch test creation aborted."
-            exit 0
-        fi
+        echo "Creating branch test '$branch_name' inside '$parent_name'."
+        echo "Full path: $(pwd)/$branch_path"
+        read -p "Proceed? (y/n): " confirm
+        [[ ! "$confirm" =~ ^[Yy]$ ]] && exit 0
     fi
 
-    mkdir -p "$BRANCH_TEST_PATH"
-    rsync -a --exclude="$SUBTESTS_DIR" --exclude="outputs" . "$BRANCH_TEST_PATH/"
-    mkdir -p "$BRANCH_TEST_PATH/$SUBTESTS_DIR"
-    PARENT_OUTPUTS_DIR="$(pwd)/outputs/$BRANCH_TEST_NAME"
-    mkdir -p "$PARENT_OUTPUTS_DIR"
-    ln -s "$PARENT_OUTPUTS_DIR" "$BRANCH_TEST_PATH/outputs"
+    mkdir -p "$branch_path" "$branch_path/$subtests_dir" "$outputs_dir"
+    rsync -a --exclude="$subtests_dir" --exclude="outputs" . "$branch_path/"
+    update_infile "$branch_path/inputs/infile.in" "$branch_id" "$branch_name" 
+    ln -s "$(pwd)/$outputs_dir" "$branch_path/outputs"
 
-    SUFFIX=$(printf "\\$(printf '%03o' $((97 + EXISTING_SUBTESTS_COUNT)))")
-    BRANCH_TEST_ID="${PARENT_TEST_ID}${SUFFIX}"
+    local metadata_file="$branch_path/metadata.yaml"
+    [[ -f "$metadata_file" ]] || error "Failed to update metadata.yaml."
 
-    METADATA_FILE="$BRANCH_TEST_PATH/metadata.yaml"
-    if [[ -f "$METADATA_FILE" ]]; then
-        yq eval ".test_name = \"$BRANCH_TEST_NAME\"" -i "$METADATA_FILE"
-        yq eval ".parent_test = \"$PARENT_TEST_NAME\"" -i "$METADATA_FILE"
-        yq eval ".test_id = \"$BRANCH_TEST_ID\"" -i "$METADATA_FILE"
-    else
-        [[ "$QUIET" == false ]] && echo "Error: Failed to update metadata.yaml."
-        exit 1
-    fi
+    yq eval ".test_name = \"$branch_name\"" -i "$metadata_file"
+    yq eval ".parent_test = \"$parent_name\"" -i "$metadata_file"
+    yq eval ".test_id = \"$branch_id\"" -i "$metadata_file"
+    yq eval ".parent_test_id = \"$parent_id\"" -i "$metadata_file"
 
     if [[ "$QUIET" == false ]]; then
-        echo "Branch test '$BRANCH_TEST_NAME' created."
-        echo "Outputs stored in: $PARENT_OUTPUTS_DIR"
-        echo "Branch test ID: $BRANCH_TEST_ID"
+        echo "Branch test '$branch_name' created."
+        echo "Outputs stored in: $outputs_dir"
+        echo "Branch test ID: $branch_id"
     fi
 }
 
+# Main script execution
+BRANCH_TEST_NAME=$(parse_arguments "$@")
 ROOT_DIR=$(get_root_dir)
-add_branch
+validate_branch_name "$BRANCH_TEST_NAME"
+read PARENT_TEST_NAME PARENT_TEST_ID < <(validate_metadata)
+create_branch "$BRANCH_TEST_NAME" "$PARENT_TEST_NAME" "$PARENT_TEST_ID"
+
