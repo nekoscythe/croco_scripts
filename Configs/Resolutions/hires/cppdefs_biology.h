@@ -385,9 +385,9 @@
                       /*   Choice of Biology models   */
 # ifdef BIOLOGY
 #  undef  PISCES
-#  undef  BIO_NChlPZD
+#  define  BIO_NChlPZD
 #  undef  BIO_N2ChlPZD2
-#  define BIO_BioEBUS
+#  undef BIO_BioEBUS
                       /*   Biology options    */
 #  ifdef PISCES
 #   undef  DIURNAL_INPUT_SRFLX
@@ -397,13 +397,13 @@
 #   undef key_sediment
 #  endif
 #  ifdef BIO_NChlPZD
-#   define  OXYGEN
+#   undef  OXYGEN
 #  endif
 #  ifdef BIO_BioEBUS
 #   define NITROUS_OXIDE
 #  endif
                       /*   Biology diagnostics    */
-#  define DIAGNOSTICS_BIO
+#  undef DIAGNOSTICS_BIO
 #  if defined DIAGNOSTICS_BIO && defined PISCES
 #   define key_trc_diaadd
 #  endif
