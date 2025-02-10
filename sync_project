@@ -1,8 +1,8 @@
 #!/bin/bash
 
 # Define locations
-WORKSTATION_PATH="/home/mk7641/storage/ACCESS/TestingScripts"
-JUBAIL_HPC_PATH="/scratch/mk7641/Projects"
+WORKSTATION_PATH="/home/mk7641/storage/ACCESS/ProductionRun"
+JUBAIL_HPC_PATH="/scratch/mk7641/ProductionRun"
 JUBAIL_HOST="mk7641@jubail.abudhabi.nyu.edu"
 
 HPC_SYMLINK_PREFIX="/scratch/mk7641/croco_scripts/"
