@@ -124,8 +124,11 @@ case $PARALLEL_MODE in
     3)
         echo "im here"
         NUM_CORES=$(get_slurm_cores)
+        echo "NUM_CORES: $NUM_CORES"
         NUM_NODES=$((NUM_CORES / 128))
+        echo "NUM_NODES: $NUM_NODES"
         NUM_HOURS=$(get_slurm_walltime)
+        echo "NUM_HOURS: $NUM_HOURS"
         echo "Running test with MPI using SLURM srun ($NUM_CORES processes)..."
 
         #create the job script
