@@ -66,8 +66,6 @@ confirm_action() {
 # Function to create test directory and structure
 create_test_directory() {
     local test_path="$1"
-
-    echo "Creating test directory: $test_path"
     mkdir -p "$test_path/subtests" "$test_path/outputs" "$test_path/inputs" "$test_path/dependencies"
 }
 
@@ -96,9 +94,7 @@ update_infile() {
     local test_reason="$3"
 
     if [[ -f "$infile" ]]; then
-        echo "Updating test title in $infile..."
         sed -i "s|(To Be Modified by script, should be the same as test title and test number)|(ID: $test_id) $test_reason|g" "$infile"
-        echo "Test title updated in $infile."
     else
         echo "Warning: infile.in not found in inputs. Skipping updates."
     fi
