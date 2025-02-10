@@ -4,7 +4,7 @@
 TEST_DIR="$(pwd)"
 METADATA_FILE="$TEST_DIR/metadata.yaml"
 LOG_FILE="$TEST_DIR/outputs/run_test.log"
-ARCHIVE_DIR="$TEST_DIR/outputs/archive"  # Directory to store archived files
+ARCHIVE_DIR="$TEST_DIR/outputs/archive"
 
 # Check if metadata.yaml exists
 if [[ ! -f "$METADATA_FILE" ]]; then
@@ -12,11 +12,11 @@ if [[ ! -f "$METADATA_FILE" ]]; then
     exit 1
 fi
 
-# Create the outputs and archive directories if they don't exist
+# Create necessary directories
 mkdir -p "$TEST_DIR/outputs"
 mkdir -p "$ARCHIVE_DIR"
 
-# Redirect all output to the log file (overwrite instead of append)
+# Redirect output to the log file
 exec > >(tee "$LOG_FILE") 2>&1
 
 # Read test details from metadata.yaml
@@ -24,7 +24,10 @@ TEST_NAME=$(yq eval '.test_name' "$METADATA_FILE")
 TEST_ID=$(yq eval '.test_id' "$METADATA_FILE")
 TEST_REASON=$(yq eval '.reason' "$METADATA_FILE")
 BINARY_PATH=$(yq eval '.binary_path' "$METADATA_FILE")
-INPUT_FILE="$TEST_DIR/inputs/infile.in"
+
+# Convert paths to relative format
+REL_BINARY_PATH="./../../Binaries/Test1_Pear"
+REL_INPUT_FILE="inputs/infile.in"
 
 # Check if the binary exists
 if [[ ! -f "$BINARY_PATH" ]]; then
@@ -51,7 +54,7 @@ echo "Test Name: $TEST_NAME"
 echo "Test ID: $TEST_ID"
 echo "Reason: $TEST_REASON"
 echo "Binary Path: $BINARY_PATH"
-echo "Input File: $INPUT_FILE"
+echo "Input File: $REL_INPUT_FILE"
 echo "Log File: $LOG_FILE"
 echo "Archive Directory: $ARCHIVE_DIR"
 echo ""
@@ -63,77 +66,101 @@ if [[ ! "$CONFIRM" =~ ^[Yy]$ ]]; then
     exit 0
 fi
 
-# Ask for the number of cores to use
-AVAILABLE_CORES=$(nproc)  # Get the number of available cores
-echo "Number of available cores: $AVAILABLE_CORES"
-read -p "Enter the number of cores to use (1-$AVAILABLE_CORES): " NUM_CORES
+# Ask for parallelization method
+echo "Select parallel execution mode:"
+echo "1) OpenMP (OMP_NUM_THREADS)"
+echo "2) MPI (mpirun)"
+echo "3) MPI with SLURM (srun)"
+read -p "Enter choice (1-3): " PARALLEL_MODE
 
-# Validate the number of cores
-if [[ ! "$NUM_CORES" =~ ^[0-9]+$ ]] || (( NUM_CORES < 1 )) || (( NUM_CORES > AVAILABLE_CORES )); then
-    echo "Error: Invalid number of cores. Please enter a number between 1 and $AVAILABLE_CORES."
-    # exit 1
-fi
+get_num_cores() {
+    AVAILABLE_CORES=$(nproc --all)
+    echo "Number of available cores: $AVAILABLE_CORES"
+    read -p "Enter the number of cores to use (1-$AVAILABLE_CORES): " NUM_CORES
 
-# Set the number of threads for OpenMP (or similar parallel frameworks)
-export OMP_NUM_THREADS="$NUM_CORES"
-echo "Running test with OMP_NUM_THREADS=$OMP_NUM_THREADS..."
-
-# Archive dependencies and input files (overwrite previous archive)
-echo "Archiving dependencies and input files..."
-rm -rf "$ARCHIVE_DIR"  # Clear the previous archive
-mkdir -p "$ARCHIVE_DIR/dependencies"
-mkdir -p "$ARCHIVE_DIR/inputs"
-
-# Copy input file to archive
-if [[ -f "$INPUT_FILE" ]]; then
-    cp "$INPUT_FILE" "$ARCHIVE_DIR/inputs/"
-    echo "Archived input file: $INPUT_FILE"
-else
-    echo "Warning: Input file not found at $INPUT_FILE."
-fi
-
-# Copy dependencies to archive
-for ((i = 0; i < DEPENDENCY_COUNT; i++)); do
-    DEPENDENCY_PATH=$(echo "$DEPENDENCIES" | yq eval ".[$i].path" -)
-    DEPENDENCY_SOURCE="$TEST_DIR/dependencies/$(basename "$DEPENDENCY_PATH")"
-    
-    if [[ -f "$DEPENDENCY_SOURCE" ]]; then
-        cp "$DEPENDENCY_SOURCE" "$ARCHIVE_DIR/dependencies/"
-        echo "Archived dependency: $DEPENDENCY_SOURCE"
-    else
-        echo "Warning: Dependency not found at $DEPENDENCY_SOURCE."
-    fi
-done
-
-# Check dependencies' hashes
-echo "Checking dependency hashes..."
-for ((i = 0; i < DEPENDENCY_COUNT; i++)); do
-    DEPENDENCY_PATH=$(echo "$DEPENDENCIES" | yq eval ".[$i].path" -)
-    DEPENDENCY_SOURCE="$TEST_DIR/dependencies/$(basename "$DEPENDENCY_PATH")"
-    
-    if [[ ! -f "$DEPENDENCY_SOURCE" ]]; then
-        echo "Error: Dependency not found at $DEPENDENCY_SOURCE."
+    if [[ ! "$NUM_CORES" =~ ^[0-9]+$ ]] || (( NUM_CORES < 1 )) || (( NUM_CORES > AVAILABLE_CORES )); then
+        echo "Error: Invalid number of cores. Please enter a number between 1 and $AVAILABLE_CORES."
         exit 1
     fi
+    echo "$NUM_CORES"
+}
 
-    CURRENT_HASH=$(sha256sum "$DEPENDENCY_SOURCE" | cut -d ' ' -f 1)
-    STORED_HASH=$(echo "$STORED_DEPENDENCY_HASHES" | grep -oP "(?<=^| )$DEPENDENCY_PATH:\K[^ ]+")
-    
-    if [[ "$CURRENT_HASH" != "$STORED_HASH" ]]; then
-        echo "Error: Dependency '$DEPENDENCY_PATH' has changed."
-        echo "Please recompile the binary before running the test."
-        exit 1  # Exit so the user can recompile the binary
+get_slurm_cores() {
+    AVAILABLE_CORES=$(512)
+    echo "Number of available cores: $AVAILABLE_CORES"
+    read -p "Enter the number of cores to use (multiple of 128 between 128 and $AVAILABLE_CORES): " NUM_CORES
+
+    if [[ ! "$NUM_CORES" =~ ^[0-9]+$ ]] || (( NUM_CORES < 128 )) || (( NUM_CORES > AVAILABLE_CORES )) || (( NUM_CORES % 128 != 0 )); then
+        echo "Error: Invalid number of cores. Please enter a multiple of 128 between 128 and $AVAILABLE_CORES."
+        exit 1
     fi
-done
+    echo "$NUM_CORES"
+}
 
-# Run the test
-echo "Running test $TEST_NAME (ID: $TEST_ID)..."
-"$BINARY_PATH" "$INPUT_FILE"
+get_slurm_walltime() {
+    read -p "Enter the number of hours to run the job (1-168): " WALLTIME_HOURS
+    #check if the input is in the range
+    if [[ ! "$WALLTIME_HOURS" =~ ^[0-9]+$ ]] || (( WALLTIME_HOURS < 1 )) || (( WALLTIME_HOURS > 168 )); then
+        echo "Error: Invalid number of hours. Please enter a number between 1 and 168."
+        exit 1
+    fi
+    echo "$WALLTIME_HOURS"
+}
 
-# Check if the test ran successfully
-if [[ $? -ne 0 ]]; then
-    echo "Error: Test execution failed."
-    exit 1
+
+# Execute based on chosen parallelization framework
+case $PARALLEL_MODE in
+    1)
+        NUM_CORES=$(get_num_cores)
+        export OMP_NUM_THREADS="$NUM_CORES"
+        echo "Running test with OMP_NUM_THREADS=$OMP_NUM_THREADS..."
+        "$BINARY_PATH" "$REL_INPUT_FILE"
+        ;;
+    2)
+        NUM_CORES=$(get_num_cores)
+        echo "Running test with MPI using mpirun ($NUM_CORES processes)..."
+        mpirun -n "$NUM_CORES" "$REL_BINARY_PATH" "$REL_INPUT_FILE"
+        ;;
+    3)
+        NUM_CORES=$(get_slurm_cores)
+        NUM_NODES=$((NUM_CORES / 128))
+        NUM_HOURS=$(get_slurm_walltime)
+        echo "Running test with MPI using SLURM srun ($NUM_CORES processes)..."
+
+        #create the job script
+        JOB_SCRIPT="$ARCHIVE_DIR/job.sh"
+        echo "#!/bin/bash" > "$JOB_SCRIPT"
+        echo "#SBATCH --ntasks=$NUM_CORES" >> "$JOB_SCRIPT"
+        echo "#SBATCH --nodes=$NUM_NODES" >> "$JOB_SCRIPT"
+        echo "#SBATCH --time=$NUM_HOURS:00:00" >> "$JOB_SCRIPT"
+        echo "#SBATCH --output=$ARCHIVE_DIR/slurm-%j.out" >> "$JOB_SCRIPT"
+        echo "#SBATCH --error=$ARCHIVE_DIR/slurm-%j.err" >> "$JOB_SCRIPT"
+        echo "# **** Put all #SBATCH directives above this line! ****" >> "$JOB_SCRIPT"
+        echo "" >> "$JOB_SCRIPT"
+        echo "# **** Actual commands start here ****" >> "$JOB_SCRIPT"
+        echo "module purge" >> "$JOB_SCRIPT"
+        echo "module load gcc/9.2.0" >> "$JOB_SCRIPT"
+        echo "module load openmpi/4.1.1rc1" >> "$JOB_SCRIPT"
+        echo "module load netcdf-fortran/4.6.1" >> "$JOB_SCRIPT"
+        echo "module load netcdf-c/4.9.0" >> "$JOB_SCRIPT"
+        echo "#Run command" >> "$JOB_SCRIPT"
+        echo "srun $REL_BINARY_PATH $REL_INPUT_FILE | tee outputs/run_test.log" >> "$JOB_SCRIPT"
+
+        #submit the job
+        sbatch "$JOB_SCRIPT"
+
+        ;;
+    *)
+        echo "Error: Invalid selection."
+        exit 1
+        ;;
+esac
+
+# Check exit status
+EXIT_STATUS=$?
+if [[ $EXIT_STATUS -ne 0 ]]; then
+    echo "Error: Test execution failed with exit code $EXIT_STATUS."
+    exit $EXIT_STATUS
 fi
 
 echo "Test executed successfully."
