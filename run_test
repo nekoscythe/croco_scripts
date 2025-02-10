@@ -122,6 +122,7 @@ case $PARALLEL_MODE in
         mpirun -n "$NUM_CORES" "$REL_BINARY_PATH" "$REL_INPUT_FILE"
         ;;
     3)
+        echo "im here"
         NUM_CORES=$(get_slurm_cores)
         NUM_NODES=$((NUM_CORES / 128))
         NUM_HOURS=$(get_slurm_walltime)
