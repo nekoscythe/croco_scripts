@@ -26,7 +26,6 @@ TEST_REASON=$(yq eval '.reason' "$METADATA_FILE")
 BINARY_PATH=$(yq eval '.binary_path' "$METADATA_FILE")
 
 # Convert paths to relative format
-REL_BINARY_PATH="./../../Binaries/Test1_Pear"
 REL_INPUT_FILE="inputs/infile.in"
 
 # Check if the binary exists
@@ -120,7 +119,7 @@ case $PARALLEL_MODE in
     2)
         NUM_CORES=$(get_num_cores)
         echo "Running test with MPI using mpirun ($NUM_CORES processes)..."
-        mpirun -n "$NUM_CORES" "$REL_BINARY_PATH" "$REL_INPUT_FILE"
+        mpirun -n "$NUM_CORES" "$BINARY_PATH" "$REL_INPUT_FILE"
         ;;
     3)
         echo "im here"
@@ -149,7 +148,7 @@ case $PARALLEL_MODE in
         echo "module load netcdf-fortran/4.6.1" >> "$JOB_SCRIPT"
         echo "module load netcdf-c/4.9.0" >> "$JOB_SCRIPT"
         echo "#Run command" >> "$JOB_SCRIPT"
-        echo "srun $REL_BINARY_PATH $REL_INPUT_FILE | tee outputs/run_test.log" >> "$JOB_SCRIPT"
+        echo "srun $BINARY_PATH $REL_INPUT_FILE | tee outputs/run_test.log" >> "$JOB_SCRIPT"
 
         #submit the job
         sbatch "$JOB_SCRIPT"
