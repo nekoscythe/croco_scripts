@@ -206,8 +206,6 @@ dependencies:
   - location: *root_dir
     path: "param.h"
   - location: *croco_dir
-    path: "OCEAN/bio_NChlPZD.F"
-  - location: *croco_dir
     path: "OCEAN/t3dmix_S.F"
 
 # Scripts

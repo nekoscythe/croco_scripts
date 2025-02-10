@@ -189,10 +189,10 @@
 # if defined VILAINE
       parameter (LLm0=180,  MMm0=130,  N=10)   ! VILAINE
 # else
-      parameter (LLm0=192,   MMm0=160,   N=32)   ! YOUR COASTAL CONFIG
+      parameter (LLm0=768,   MMm0=640,   N=32)   ! YOUR COASTAL CONFIG
 # endif
 #else
-      parameter (LLm0=192,  MMm0=160,  N=32)
+      parameter (LLm0=768,  MMm0=640,  N=32)
 #endif
 
 #ifdef AGRIF
@@ -222,11 +222,11 @@
       integer NSUB_X, NSUB_E, NPP
 #ifdef MPI
       integer NP_XI, NP_ETA, NNODES
-      parameter (NP_XI=16,  NP_ETA=8,  NNODES=NP_XI*NP_ETA)
+      parameter (NP_XI=,  NP_ETA=,  NNODES=NP_XI*NP_ETA)
       parameter (NPP=1)
       parameter (NSUB_X=1, NSUB_E=1)
 #elif defined OPENMP
-      parameter (NPP=32)
+      parameter (NPP=64)
 # ifdef AUTOTILING
       common/distrib/NSUB_X, NSUB_E
 # else

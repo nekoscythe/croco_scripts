@@ -1,0 +1,109 @@
+#!/bin/bash
+
+# Directory and file paths for param.h editing
+PARAM_FILE="dependencies/param.h"
+METADATA_FILE="metadata.yaml"
+
+# Validate if a number is a positive integer
+is_positive_integer() {
+    local num="$1"
+    [[ "$num" =~ ^[0-9]+$ ]] && ((num > 0))
+}
+
+# Validate CPU core count meets requirements
+validate_cpu_cores() {
+    local cpu_cores="$1"
+    
+    if ! is_positive_integer "$cpu_cores"; then
+        echo "Error: CPU cores must be a positive integer." >&2
+        return 1
+    fi
+
+    if [[ "$cpu_cores" -gt 64 ]] && [[ $((cpu_cores % 128)) -ne 0 ]]; then
+        echo "Error: CPU_CORES must be divisible by 128 if greater than 64." >&2
+        return 1
+    fi
+    
+    return 0
+}
+
+# Calculate optimal XI and ETA divisions
+calculate_optimal_divisions() {
+    local cpu_cores="$1"
+    local sqrt=$(echo "sqrt($cpu_cores)" | bc)
+    local eta_div=1
+    
+    while [ $((eta_div * 2)) -le "$sqrt" ]; do
+        eta_div=$((eta_div * 2))
+    done
+    
+    local xi_div=$((cpu_cores / eta_div))
+    echo "$xi_div $eta_div"
+}
+
+# Get XI division from result
+get_xi_div() {
+    echo "$1" | awk '{print $1}'
+}
+
+# Get ETA division from result
+get_eta_div() {
+    echo "$1" | awk '{print $2}'
+}
+
+# Update param.h file with new values
+update_param_file() {
+    local xi_div="$1"
+    local eta_div="$2"
+    
+    if [[ ! -f "$PARAM_FILE" ]]; then
+        echo "Error: $PARAM_FILE not found." >&2
+        return 1
+    fi
+    
+    # Find and replace NP_XI and NP_ETA values
+    sed -i "s/NP_XI=[0-9]*/NP_XI=$xi_div/" "$PARAM_FILE"
+    sed -i "s/NP_ETA=[0-9]*/NP_ETA=$eta_div/" "$PARAM_FILE"
+}
+
+#update the number of cores in metadata.yaml
+update_metadata_file() {
+    local cpu_cores="$1"    
+
+    # Find and replace CPU_CORES value in metadata
+    yq eval -i ".Config.cpu_cores = ${cpu_cores}" "$METADATA_FILE"
+}
+
+
+# Process CPU cores and update param.h
+process_cores() {
+    local cpu_cores="$1"
+    
+    if ! validate_cpu_cores "$cpu_cores"; then
+        return 1
+    fi
+    
+    divisors=$(calculate_optimal_divisions "$cpu_cores")
+    xi_div=$(get_xi_div "$divisors")
+    eta_div=$(get_eta_div "$divisors")
+    
+    update_param_file "$xi_div" "$eta_div"
+    update_metadata_file "$cpu_cores"
+}
+
+# Main function for interactive use
+main() {
+    # If argument provided, use it directly
+    if [ $# -eq 1 ]; then
+        process_cores "$1"
+    else
+        # Otherwise ask for input
+        read -p "Enter the number of CPU cores to use: " cpu_cores
+        process_cores "$cpu_cores"
+    fi
+}
+
+# Run main only if script is executed directly
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+    main "$@"
+fi

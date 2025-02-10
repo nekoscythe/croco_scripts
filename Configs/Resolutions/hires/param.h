@@ -222,11 +222,11 @@
       integer NSUB_X, NSUB_E, NPP
 #ifdef MPI
       integer NP_XI, NP_ETA, NNODES
-      parameter (NP_XI=32,  NP_ETA=16,  NNODES=NP_XI*NP_ETA)
+      parameter (NP_XI=,  NP_ETA=,  NNODES=NP_XI*NP_ETA)
       parameter (NPP=1)
       parameter (NSUB_X=1, NSUB_E=1)
 #elif defined OPENMP
-      parameter (NPP=32)
+      parameter (NPP=64)
 # ifdef AUTOTILING
       common/distrib/NSUB_X, NSUB_E
 # else
