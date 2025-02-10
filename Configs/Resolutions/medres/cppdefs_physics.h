@@ -13,7 +13,44 @@
    This is "cppdefs.h": MODEL CONFIGURATION FILE
    ==== == ============ ===== ============= ====
 */
-
+/* 
+        SELECT ACADEMIC TEST CASES 
+*/
+#undef  BASIN           /* Basin Example */
+#undef  CANYON          /* Canyon Example */
+#undef  EQUATOR         /* Equator Example  */
+#undef  INNERSHELF      /* Inner Shelf Example */
+#undef  SINGLE_COLUMN   /* 1DV vertical mixing Example */
+#undef  RIVER           /* River run-off Example */
+#undef  OVERFLOW        /* Gravitational/Overflow Example */
+#undef  SEAMOUNT        /* Seamount Example */
+#undef  SHELFRONT       /* Shelf Front Example */
+#undef  SOLITON         /* Equatorial Rossby Wave Example */
+#undef  THACKER         /* Thacker wetting-drying Example */
+#undef  UPWELLING       /* Upwelling Example */
+#undef  VORTEX          /* Baroclinic Vortex Example */
+#undef  INTERNAL        /* Internal Tide Example */
+#undef  IGW             /* COMODO Internal Tide Example */
+#undef  JET             /* Baroclinic Jet Example */
+#undef  SHOREFACE       /* Shoreface Test Case on a Planar Beach */
+#undef  RIP             /* Rip Current Test Case */
+#undef  SANDBAR         /* Bar-generating Flume Example */
+#undef  SWASH           /* Swash Test Case on a Planar Beach */
+#undef  TANK            /* Tank Example */
+#undef  MOVING_BATHY    /* Moving Bathymetry Example */
+#undef  ACOUSTIC        /* Acoustic wave Example */
+#undef  GRAV_ADJ        /* Graviational Adjustment Example */
+#undef  ISOLITON        /* Internal Soliton Example */
+#undef  KH_INST         /* Kelvin-Helmholtz Instability Example */
+#undef  TS_HADV_TEST    /* Horizontal tracer advection Example */
+#undef  DUNE            /* Dune migration Example */
+#undef  SED_TOY         /* 1DV sediment toy Example */
+#undef  TIDAL_FLAT      /* 2DV tidal flat Example */
+#undef  ESTUARY         /* 3D tidal estuary Example */
+/* 
+        ... OR REALISTIC CONFIGURATIONS
+*/
+#undef  COASTAL         /* COASTAL Applications */
 #define REGIONAL        /* REGIONAL Applications */
 
 
@@ -81,7 +118,7 @@
                       /* Parallelization */
 # ifdef MPI
 #  undef  PARALLEL_FILES
-#  undef  NC4PAR
+#  define  NC4PAR
 #  undef  MPI_NOLAND
 #  undef  MPI_TIME
 # endif
@@ -144,8 +181,26 @@
 # undef  SEA_ICE_NOFLUX
                       /* Lateral Forcing */
 # undef CLIMATOLOGY
-# undef  FRC_BRY
+# ifdef CLIMATOLOGY
+#  define ZCLIMATOLOGY
+#  define M2CLIMATOLOGY
+#  define M3CLIMATOLOGY
+#  define TCLIMATOLOGY
 
+#  define ZNUDGING
+#  define M2NUDGING
+#  define M3NUDGING
+#  define TNUDGING
+#  undef  ROBUST_DIAG
+# endif
+
+# undef  FRC_BRY
+# ifdef FRC_BRY
+#  define Z_FRC_BRY
+#  define M2_FRC_BRY
+#  define M3_FRC_BRY
+#  define T_FRC_BRY
+# endif
                       /* Lateral Momentum Advection (default UP3) */
 # undef UV_HADV_UP3
 # undef  UV_HADV_UP5
@@ -153,7 +208,9 @@
 # undef  UV_HADV_TVD
                       /* Lateral Explicit Momentum Mixing */
 # undef  UV_VIS2
-
+# ifdef UV_VIS2
+#  define UV_VIS_SMAGO
+# endif
                       /* Vertical Momentum Advection */
 # undef UV_VADV_SPLINES
 # define  UV_VADV_WENO5
@@ -183,8 +240,37 @@
 # undef  BVF_MIXING
 # undef LMD_MIXING
 # define  GLS_MIXING
-
-
+# ifdef LMD_MIXING
+#  define LMD_SKPP
+#  define LMD_BKPP
+#  define LMD_RIMIX
+#  define LMD_CONVEC
+#  define LMD_NONLOCAL
+#  undef  LMD_DDMIX
+#  undef  LMD_LANGMUIR
+# endif
+                      /* Wave-current interactions */
+# ifdef OW_COUPLING
+#  define MRL_WCI
+#  define BBL
+# endif
+# ifdef MRL_WCI
+#  ifndef OW_COUPLING
+#   undef  WAVE_OFFLINE
+#   define ANA_WWAVE
+#   undef  WKB_WWAVE
+#  endif
+#  undef  WAVE_ROLLER
+#  define WAVE_STREAMING
+#  define WAVE_FRICTION
+#  define WAVE_RAMP
+#  ifdef WKB_WWAVE
+#   undef  WKB_OBC_NORTH
+#   undef  WKB_OBC_SOUTH
+#   define WKB_OBC_WEST
+#   undef  WKB_OBC_EAST
+#  endif
+# endif
                       /* Bottom Forcing */
 # define ANA_BSFLUX
 # define ANA_BTFLUX
@@ -195,7 +281,16 @@
 #  undef PSOURCE_NCFILE_TS
 # endif
                       /* Open Boundary Conditions */
-
+# ifdef TIDES
+#  define SSH_TIDES
+#  define UV_TIDES
+#  define POT_TIDES
+#  undef  TIDES_MAS
+#  ifndef UV_TIDES
+#   define OBC_REDUCED_PHYSICS
+#  endif
+#  define TIDERAMP
+# endif
 # define OBC_M2CHARACT
 # undef  OBC_M2ORLANSKI
 # define OBC_M3ORLANSKI
@@ -290,15 +385,23 @@
                       /*   Choice of Biology models   */
 # ifdef BIOLOGY
 #  undef  PISCES
-#  define  BIO_NChlPZD
+#  undef  BIO_NChlPZD
 #  undef  BIO_N2ChlPZD2
-#  undef BIO_BioEBUS
+#  define BIO_BioEBUS
                       /*   Biology options    */
-
+#  ifdef PISCES
+#   undef  DIURNAL_INPUT_SRFLX
+#   define key_pisces
+#   define key_ligand
+#   undef key_pisces_quota
+#   undef key_sediment
+#  endif
 #  ifdef BIO_NChlPZD
 #   define  OXYGEN
 #  endif
-
+#  ifdef BIO_BioEBUS
+#   define NITROUS_OXIDE
+#  endif
                       /*   Biology diagnostics    */
 #  define DIAGNOSTICS_BIO
 #  if defined DIAGNOSTICS_BIO && defined PISCES
@@ -306,7 +409,16 @@
 #  endif
 # endif
                       /*   Lagrangian floats model    */
-
+# ifdef FLOATS
+#  undef  FLOATS_GLOBAL_ATTRIBUTES
+#  undef  IBM
+#  undef  RANDOM_WALK
+#  ifdef RANDOM_WALK
+#   define DIEL_MIGRATION
+#   define RANDOM_VERTICAL
+#   define RANDOM_HORIZONTAL
+#  endif
+# endif
                       /*   Stations recording    */
 # ifdef STATIONS
 #  define ALL_SIGMA

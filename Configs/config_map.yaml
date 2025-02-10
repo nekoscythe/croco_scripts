@@ -4,16 +4,22 @@ Resolutions:
     input_frc: "Resolutions/hires/input_frc.nc"
     param: "Resolutions/hires/param.h"
     infile: "Resolutions/hires/infile.in"
+    cppdefs_biology: "Resolutions/hires/cppdefs_biology.h"
+    cppdefs_physics: "Resolutions/hires/cppdefs_physics.h"
   medres:
     input_grd: "Resolutions/medres/input_grd.nc"
     input_frc: "Resolutions/medres/input_frc.nc"
     param: "Resolutions/medres/param.h"
     infile: "Resolutions/medres/infile.in"
+    cppdefs_biology: "Resolutions/medres/cppdefs_biology.h"
+    cppdefs_physics: "Resolutions/medres/cppdefs_physics.h"
   lowres:
     input_grd: "Resolutions/lowres/input_grd.nc"
     input_frc: "Resolutions/lowres/input_frc.nc"
     param: "Resolutions/lowres/param.h"
     infile: "Resolutions/lowres/infile.in"
+    cppdefs_biology: "Resolutions/lowres/cppdefs_biology.h"
+    cppdefs_physics: "Resolutions/lowres/cppdefs_physics.h"
 
 
 InitialConditions:
@@ -30,10 +36,7 @@ Diffusion:
     t3dmix_S: "Diffusion/t3dmix_S_EHDA.F"
   EHDB:
     t3dmix_S: "Diffusion/t3dmix_S_EHDB.F"
-
-BaseFiles:
-  cppdefs_biology: "BaseFiles/cppdefs_biology.h"
-  cppdefs_physics: "BaseFiles/cppdefs_physics.h"
+    
 
 FileDestinations:
   Grid: "inputs/input_grd.nc"
