@@ -49,7 +49,7 @@ build_test_tree() {
             STATUS="[Failed]"
         elif [[ "$HAS_EXECUTION_STARTED" == "yes" && "$HAS_EXECUTION_COMPLETED" == "no" ]]; then
             STATUS_COLOR="\e[35m"  # Magenta (Interrupted)
-            STATUS="[Interrupted]"
+            STATUS="[Running or Interrupted]"
         else
             STATUS_COLOR="\e[32m"  # Green (Passed)
             STATUS="[Passed]"
