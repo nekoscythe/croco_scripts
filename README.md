@@ -34,7 +34,6 @@ The typical workflow for using these scripts is as follows:
 3.  **Configure the test:**
     *   Navigate to the test directory using `source goto <test_id>`.
     *   Modify the input files in the `inputs/` directory as needed.
-    *   Run `./set_cpu_cores` to set the number of CPU cores for the test.
 4.  **Compile the model:**
     *   Run `./compile_test` to compile the model binary. This script manages dependencies and CPU core settings.
 5.  **Run the test:**
@@ -46,6 +45,4 @@ The typical workflow for using these scripts is as follows:
     *   Use `./add_branch` to create subtests for different configurations or scenarios.
     *   Use `./remove_test` to remove a test case that is no longer needed.
 8.  **Synchronize with remote environments (optional):**
-    *   Use `./sync_configs`, `./sync_project`, and `./sync_symlinks` to synchronize the project directory and configuration files between your workstation and a remote HPC environment.
-
-By following this workflow and utilizing the provided scripts, you can efficiently manage and execute a large suite of tests for your numerical model.
+    *   Use `./sync_configs`, `./sync_project`, and `./sync_symlinks` to synchronize the project directory and configuration files between the workstation and the remote Jubail HPC environment.
