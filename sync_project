@@ -212,9 +212,9 @@ rsync -av --size-only -u --delete \
       --exclude="**/outputs" \
       --exclude="**/outputs/**" \
       --include="*/" \
-      --include="Tests/**/**/inputs/**" \
-      --include="Tests/**/**/dependencies/**" \
-      --include="Tests/**/**/metadata.yaml" \
+      --include="inputs/**" \
+      --include="dependencies/**" \
+      --include="metadata.yaml" \
       --include="Binaries/**" \
       --exclude="*" \
       "$JUBAIL_HOST:$JUBAIL_HPC_PATH/" "$WORKSTATION_PATH/"
