@@ -180,6 +180,7 @@ sync_to_hpc() {
 
   rsync -az --ignore-existing \
     --include="Tests/**" \
+    --include="Binaries/**" \
     --exclude="Tests/**/outputs/**" \
     "$WORKSTATION_PATH/" "$JUBAIL_HOST:$JUBAIL_HPC_PATH/"
   
