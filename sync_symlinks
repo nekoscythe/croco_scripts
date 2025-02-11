@@ -46,7 +46,6 @@ echo "Source project name: $SRC_PROJECT_NAME"
 echo "Workstation path: $WORKSTATION_PATH"
 echo "Jubail HPC path: $JUBAIL_HPC_PATH"
 
-
 update_remote_symlinks() {
 
   echo "Modifying symlinks in $JUBAIL_HPC_PATH/Tests on $JUBAIL_HOST..."
@@ -135,103 +134,8 @@ update_local_symlinks() {
   done
 }
 
-
-sync_from_hpc() {
-  echo ""
-  echo "Syncing Outputs and Logs from Jubail HPC to Workstation..."
-
-  scp "$JUBAIL_HOST:$JUBAIL_HPC_PATH/settings.yaml" "/tmp/destination_settings.yaml" > /dev/null 2>&1
-  echo "Source project name: $SRC_PROJECT_NAME"
-  DEST_PROJECT_NAME=$(extract_project_name "/tmp/destination_settings.yaml")
-  if [ "$SRC_PROJECT_NAME" != "$DEST_PROJECT_NAME" ]; then
-    echo "Error: Project names do not match!"
-    exit 1
-  fi
-
-  echo ""
-  echo "--- Dry run for Outputs and Logs directories ---"
-  # Dry run
- rsync -nav -u --include='*/' --include='outputs/**' \
- --include='Binaries/**' --exclude='*' \
- "$JUBAIL_HOST:$JUBAIL_HPC_PATH/" "$WORKSTATION_PATH/"
-
-
-  read -p "Do you want to proceed with the sync? (y/n): " confirm
-  if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
-    echo "Sync aborted."
-    exit 0
-  fi
-
-  echo ""
-  echo "--- Syncing Outputs and Logs directories ---"
-  # Actual sync
- rsync -av -u --include='*/' --include='outputs/**' \
- --include='Binaries/**' --exclude='*' \
- "$JUBAIL_HOST:$JUBAIL_HPC_PATH/" "$WORKSTATION_PATH/"
-
-  update_local_symlinks # Consider if you still need to update local symlinks after output sync - maybe not.
-  echo "Sync from HPC complete!"
-}
-
-# Function to sync from Workstation to Jubail HPC (only binaries & directory structure)
-sync_to_hpc() {
-  echo ""
-  echo "Syncing from Workstation to Jubail HPC (excluding outputs)..."
-
-  scp "$JUBAIL_HOST:$JUBAIL_HPC_PATH/settings.yaml" "/tmp/destination_settings.yaml" > /dev/null 2>&1
-  DEST_PROJECT_NAME=$(extract_project_name "/tmp/destination_settings.yaml")
-
-  if [ "$SRC_PROJECT_NAME" != "$DEST_PROJECT_NAME" ]; then
-    echo "Error: Project names do not match!"
-    exit 1
-  fi
-
-  echo ""
-  echo "--- Dry run ---"
-  # Dry run for Tests directory
-  
-rsync -nav --size-only -u --delete \
-      --exclude="**/outputs" \
-      --exclude="**/outputs/**" \
-      --include="*/" \
-      --include="inputs/**" \
-      --include="dependencies/**" \
-      --include="metadata.yaml" \
-      --include="Binaries/**" \
-      --exclude="*" \
-      "$JUBAIL_HOST:$JUBAIL_HPC_PATH/" "$WORKSTATION_PATH/"
-
-  read -p "Do you want to proceed with syncing to Jubail HPC (Tests & Binaries)? (y/n): " confirm
-  if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
-    echo "Sync to HPC aborted."
-    exit 0
-  fi
-
-   # Dry run for Tests directory
-rsync -av --size-only -u --delete \
-      --exclude="**/outputs" \
-      --exclude="**/outputs/**" \
-      --include="*/" \
-      --include="Tests/**/**/inputs/**" \
-      --include="Tests/**/**/dependencies/**" \
-      --include="Tests/**/**/metadata.yaml" \
-      --include="Binaries/**" \
-      --exclude="*" \
-      "$JUBAIL_HOST:$JUBAIL_HPC_PATH/" "$WORKSTATION_PATH/"
-  
+# if running as a script
+if [ "${1}" != "--source-only" ]; then
+  update_local_symlinks
   update_remote_symlinks
-
-  echo "Sync complete!"
-}
-
-# Prompt user for sync direction
-echo "Choose sync direction:"
-echo "1) Sync from Jubail HPC → Workstation (Binaries and Tests)"
-echo "2) Sync from Workstation → Jubail HPC (Test Structure Only)"
-read -p "Enter choice [1 or 2]: " choice
-
-case $choice in
-  1) sync_from_hpc ;;
-  2) sync_to_hpc ;;
-  *) echo "Invalid choice, exiting."; exit 1 ;;
-esac
+fi
