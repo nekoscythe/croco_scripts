@@ -135,103 +135,187 @@ update_local_symlinks() {
   done
 }
 
+compare_projects() {
+  # Generate directory structure excluding "Binaries" and "outputs" while stripping symlink targets
+  tree -a -I "Binaries|outputs" -n --dirsfirst "$WORKSTATION_PATH/Tests" | sed 's/ -> .*//' > /tmp/workstation_tree.txt
+  ssh "$JUBAIL_HOST" "tree -a -I 'Binaries|outputs' -n --dirsfirst \"$JUBAIL_HPC_PATH/Tests\" | sed 's/ -> .*//'" > /tmp/hpc_tree.txt
+
+  # Remove the first and last lines from the temporary files
+  sed -i '1d;$d' /tmp/workstation_tree.txt
+  sed -i '1d;$d' /tmp/hpc_tree.txt
+
+  # Compare the two files
+  diffed=$(diff /tmp/workstation_tree.txt /tmp/hpc_tree.txt)
+
+  if [[ -z "$diffed" ]]; then
+    echo "Projects are identical!"
+  else
+    echo "Differences found:"
+    echo "$diffed"
+  fi
+}
+
+
+
+
+
+
 
 sync_from_hpc() {
-  echo ""
-  echo "Syncing Outputs and Logs from Jubail HPC to Workstation..."
+    echo ""
+    echo "Syncing from Jubail HPC to Workstation..."
 
-  scp "$JUBAIL_HOST:$JUBAIL_HPC_PATH/settings.yaml" "/tmp/destination_settings.yaml" > /dev/null 2>&1
-  echo "Source project name: $SRC_PROJECT_NAME"
-  DEST_PROJECT_NAME=$(extract_project_name "/tmp/destination_settings.yaml")
-  if [ "$SRC_PROJECT_NAME" != "$DEST_PROJECT_NAME" ]; then
-    echo "Error: Project names do not match!"
-    exit 1
-  fi
+    SETTINGS_FILE=$(get_root_dir)/settings.yaml
+    SRC_PROJECT_NAME=$(extract_project_name "$SETTINGS_FILE")
+    WORKSTATION_PATH="$WORKSTATION_TESTS_PATH/$SRC_PROJECT_NAME"
+    JUBAIL_HPC_PATH="$JUBAIL_HPC_TESTS_PATH/$SRC_PROJECT_NAME"
 
-  echo ""
-  echo "--- Dry run for Outputs and Logs directories ---"
-  # Dry run
- rsync -nav -u --include='*/' --include='outputs/**' \
- --include='Binaries/**' --exclude='*' \
- "$JUBAIL_HOST:$JUBAIL_HPC_PATH/" "$WORKSTATION_PATH/"
+    # Retrieve destination project name
+    scp "$JUBAIL_HOST:$JUBAIL_HPC_PATH/settings.yaml" "/tmp/source_settings.yaml" > /dev/null 2>&1
+    DEST_PROJECT_NAME=$(extract_project_name "/tmp/source_settings.yaml")
 
+    if [[ "$SRC_PROJECT_NAME" != "$DEST_PROJECT_NAME" ]]; then
+        echo "Error: Project names do not match!"
+        exit 1
+    fi
 
-  read -p "Do you want to proceed with the sync? (y/n): " confirm
-  if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
-    echo "Sync aborted."
-    exit 0
-  fi
+    # Prompt for sync mode
+    echo ""
+    echo "Select sync mode:"
+    echo "1) Missing only (default) - Copy only missing files"
+    echo "2) Update - Copy newer files"
+    echo "3) Overwrite - Replace everything"
+    read -p "Choose an option (1/2/3, default 1): " sync_mode
+    sync_mode=${sync_mode:-1}  # Default to "1" if user presses enter
 
-  echo ""
-  echo "--- Syncing Outputs and Logs directories ---"
-  # Actual sync
- rsync -av -u --include='*/' --include='outputs/**' \
- --include='Binaries/**' --exclude='*' \
- "$JUBAIL_HOST:$JUBAIL_HPC_PATH/" "$WORKSTATION_PATH/"
+    if [[ "$sync_mode" == "1" ]]; then
+        RSYNC_OPTIONS="--ignore-existing"  # Missing only
+    elif [[ "$sync_mode" == "2" ]]; then
+        RSYNC_OPTIONS="--update"  # Update existing
+    elif [[ "$sync_mode" == "3" ]]; then
+        RSYNC_OPTIONS="--delete"  # Overwrite
+    else
+        echo "Invalid choice. Aborting."
+        exit 1
+    fi
 
-  update_local_symlinks # Consider if you still need to update local symlinks after output sync - maybe not.
-  echo "Sync from HPC complete!"
+    # Prompt user for additional sync options
+    INCLUDE_OPTIONS="--include='*/' --include='*outputs/**' --exclude='*'"  # Default to syncing only 'outputs'
+
+    echo ""
+    read -p "Do you want to sync any additional files (inputs, dependencies, metadata)? (y/n): " sync_additional
+    if [[ "$sync_additional" =~ ^[Yy]$ ]]; then
+        read -p "Include inputs? (y/n): " include_inputs
+        [[ "$include_inputs" =~ ^[Yy]$ ]] && INCLUDE_OPTIONS+=" --include='*inputs/**'"
+
+        read -p "Include dependencies? (y/n): " include_dependencies
+        [[ "$include_dependencies" =~ ^[Yy]$ ]] && INCLUDE_OPTIONS+=" --include='*dependencies/**'"
+
+        read -p "Include metadata.yaml? (y/n): " include_metadata
+        [[ "$include_metadata" =~ ^[Yy]$ ]] && INCLUDE_OPTIONS+=" --include='metadata.yaml'"
+    fi
+
+    # Dry run
+    echo ""
+    echo "--- Dry run: Syncing selected files from HPC ---"
+    rsync -nav $RSYNC_OPTIONS $INCLUDE_OPTIONS "$JUBAIL_HOST:$JUBAIL_HPC_PATH/Tests/" "$WORKSTATION_PATH/Tests/"
+
+    # Confirm sync
+    read -p "Proceed with sync? (y/n): " confirm
+    if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
+        echo "Sync aborted."
+        exit 0
+    fi
+
+    # Perform actual sync (remove `-n` for real sync)
+    rsync -av $RSYNC_OPTIONS $INCLUDE_OPTIONS "$JUBAIL_HOST:$JUBAIL_HPC_PATH/Tests/" "$WORKSTATION_PATH/Tests/"
+
+    update_local_symlinks
+    echo "Sync from HPC complete!"
 }
 
 # Function to sync from Workstation to Jubail HPC (only binaries & directory structure)
 sync_to_hpc() {
-  echo ""
-  echo "Syncing from Workstation to Jubail HPC (excluding outputs)..."
+    echo ""
+    echo "Syncing from Workstation to Jubail HPC..."
 
-  scp "$JUBAIL_HOST:$JUBAIL_HPC_PATH/settings.yaml" "/tmp/destination_settings.yaml" > /dev/null 2>&1
-  DEST_PROJECT_NAME=$(extract_project_name "/tmp/destination_settings.yaml")
+    SETTINGS_FILE=$(get_root_dir)/settings.yaml
+    SRC_PROJECT_NAME=$(extract_project_name "$SETTINGS_FILE")
+    WORKSTATION_PATH="$WORKSTATION_TESTS_PATH/$SRC_PROJECT_NAME"
+    JUBAIL_HPC_PATH="$JUBAIL_HPC_TESTS_PATH/$SRC_PROJECT_NAME"
 
-  if [ "$SRC_PROJECT_NAME" != "$DEST_PROJECT_NAME" ]; then
-    echo "Error: Project names do not match!"
-    exit 1
-  fi
+    # Retrieve destination project name
+    scp "$JUBAIL_HOST:$JUBAIL_HPC_PATH/settings.yaml" "/tmp/destination_settings.yaml" > /dev/null 2>&1
+    DEST_PROJECT_NAME=$(extract_project_name "/tmp/destination_settings.yaml")
 
-  echo ""
-  echo "--- Dry run ---"
-  # Dry run for Tests directory
-  
-rsync -nav --size-only -u --delete \
-      --exclude="**/outputs" \
-      --exclude="**/outputs/**" \
-      --include="*/" \
-      --include="inputs/**" \
-      --include="dependencies/**" \
-      --include="metadata.yaml" \
-      --include="Binaries/**" \
-      --exclude="*" \
-      "$JUBAIL_HOST:$JUBAIL_HPC_PATH/" "$WORKSTATION_PATH/"
+    if [ "$SRC_PROJECT_NAME" != "$DEST_PROJECT_NAME" ]; then
+        echo "Error: Project names do not match!"
+        exit 1
+    fi
 
-  read -p "Do you want to proceed with syncing to Jubail HPC (Tests & Binaries)? (y/n): " confirm
-  if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
-    echo "Sync to HPC aborted."
-    exit 0
-  fi
+    # Prompt user for inclusion options
+    echo "Select what to include in the sync:"
+    read -p "Include outputs? (y/n): " include_outputs
+    read -p "Include metadata.yaml? (y/n): " include_metadata
+    read -p "Include inputs? (y/n): " include_inputs
+    read -p "Include dependencies? (y/n): " include_dependencies
 
-   # Dry run for Tests directory
-rsync -av --size-only -u --delete \
-      --exclude="**/outputs" \
-      --exclude="**/outputs/**" \
-      --include="*/" \
-      --include="inputs/**" \
-      --include="dependencies/**" \
-      --include="metadata.yaml" \
-      --include="Binaries/**" \
-      --exclude="*" \
-      "$JUBAIL_HOST:$JUBAIL_HPC_PATH/" "$WORKSTATION_PATH/"
-  
-  update_remote_symlinks
+    # Construct rsync include options dynamically
+    INCLUDE_OPTIONS="--include='*/'"
+    [[ "$include_outputs" =~ ^[Yy]$ ]] && INCLUDE_OPTIONS+=" --include='*outputs/**'"
+    [[ "$include_metadata" =~ ^[Yy]$ ]] && INCLUDE_OPTIONS+=" --include='metadata.yaml'"
+    [[ "$include_inputs" =~ ^[Yy]$ ]] && INCLUDE_OPTIONS+=" --include='*inputs/**'"
+    [[ "$include_dependencies" =~ ^[Yy]$ ]] && INCLUDE_OPTIONS+=" --include='*dependencies/**'"
+    INCLUDE_OPTIONS+=" --exclude='*'"  # Exclude everything else by default
 
-  echo "Sync complete!"
+    # Prompt for sync mode
+    echo ""
+    echo "Select sync mode:"
+    echo "1) Missing only (default) - Copy only missing files"
+    echo "2) Update - Copy newer files"
+    echo "3) Overwrite - Replace everything"
+    read -p "Choose an option (1/2/3, default 1): " sync_mode
+    sync_mode=${sync_mode:-1}  # Default to "1" if user presses enter
+
+    if [[ "$sync_mode" == "1" ]]; then
+        RSYNC_OPTIONS="--ignore-existing"  # Missing only
+    elif [[ "$sync_mode" == "2" ]]; then
+        RSYNC_OPTIONS="--update"  # Update existing
+    elif [[ "$sync_mode" == "3" ]]; then
+        RSYNC_OPTIONS="--delete"  # Overwrite
+    else
+        echo "Invalid choice. Aborting."
+        exit 1
+    fi
+
+    # Dry run
+    echo "Preview of changes:"
+    rsync -nav $RSYNC_OPTIONS $INCLUDE_OPTIONS "$WORKSTATION_PATH/Tests" "$JUBAIL_HOST:$JUBAIL_HPC_PATH"
+
+    # Prompt user to confirm sync
+    read -p "Proceed with sync? (y/n): " confirm
+    if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
+        echo "Sync aborted."
+        exit 0
+    fi
+
+    # Execute the sync
+    rsync -av $RSYNC_OPTIONS $INCLUDE_OPTIONS "$WORKSTATION_PATH/Tests" "$JUBAIL_HOST:$JUBAIL_HPC_PATH"
+
+    update_remote_symlinks
+    echo "Sync to HPC complete!"
 }
 
 # Prompt user for sync direction
 echo "Choose sync direction:"
-echo "1) Sync from Jubail HPC → Workstation (Binaries and Tests)"
-echo "2) Sync from Workstation → Jubail HPC (Test Structure Only)"
-read -p "Enter choice [1 or 2]: " choice
+echo "1) Sync from Jubail HPC → Workstation (Outputs Only)"
+echo "2) Sync from Workstation → Jubail HPC"
+echo "3) Compare projects"
+read -p "Enter choice: " choice
 
 case $choice in
   1) sync_from_hpc ;;
   2) sync_to_hpc ;;
+  3) compare_projects ;;
   *) echo "Invalid choice, exiting."; exit 1 ;;
 esac
