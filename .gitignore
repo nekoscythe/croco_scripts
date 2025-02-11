@@ -1,3 +1,3 @@
 *.nc
 *.aider*
-Configs/InitialConditions/Config1/Config1.ipynb
+*.ipynb*
