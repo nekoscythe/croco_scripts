@@ -1,95 +1,51 @@
-# Scripting Project Overview
+# Project Management Scripts
 
-This project consists of several Bash scripts designed to manage and organize a testing environment for a project. The scripts help in creating, navigating, and managing tests, as well as initializing the project structure. Below is an overview of each script and its functionality.
+This project provides a suite of bash scripts designed to streamline the creation, management, and execution of tests for a numerical model. These scripts automate common tasks such as initializing the project structure, creating new tests, running tests, and synchronizing configurations between different environments.
 
-## Scripts and Features
+## Script Descriptions
 
-### `tree.sh`
+*   **`add_branch`**: Creates a new subtest (branch) within an existing test directory, inheriting the parent test's configuration.
+*   **`add_diffusion_subtests`**: Adds a set of standard diffusion-related subtests to a given test case.
+*   **`add_test`**: Creates a new test case, setting up the directory structure, metadata, and dependencies.
+*   **`compile_test`**: Compiles the model binary for a specific test case, managing dependencies and CPU core settings.
+*   **`generate_settings`**: Generates the `settings.yaml` file, which configures project-wide settings.
+*   **`goto`**: Navigates the user to a specified test directory.
+*   **`initialize_project`**: Initializes the project directory structure, creating essential directories and configuration files.
+*   **`load_configuration`**: Loads configuration settings for a test case, copying necessary files and updating metadata.
+*   **`make_executable`**: Makes all files in the current directory executable.
+*   **`remove_test`**: Removes a test case and its associated files.
+*   **`run_test`**: Executes a test case, managing parallelization options and logging.
+*   **`set_cpu_cores`**: Sets the number of CPU cores to be used for a test, updating the `param.h` file and metadata.
+*   **`sync_configs`**: Synchronizes configuration files between different environments (e.g., workstation and HPC).
+*   **`sync_project`**: Synchronizes the project directory between different environments.
+*   **`sync_symlinks`**: Updates symbolic links within the project to point to the correct locations.
+*   **`ttree`**: Displays a tree-like structure of the tests directory, showing test status.
 
-**Overview:**  
-This script displays a tree structure of all tests and their subtests, showing dependencies between tests.
+## Workflow
 
-**Features:**
-- **Root Directory Detection:** Automatically detects the project root directory by looking for `settings.yaml`.
-- **Tests Directory Extraction:** Extracts the `tests_dir` value from `settings.yaml` using `yq`.
-- **Test Tree Display:** Recursively lists all subtests and displays them in a tree format.
-- **Dependency Tracking:** Shows dependencies between tests as specified in `metadata.yaml`.
+The typical workflow for using these scripts is as follows:
 
----
+1.  **Initialize the project:**
+    *   Run `./initialize_project` to set up the basic directory structure and create the `settings.yaml` file.
+2.  **Create a new test:**
+    *   Run `./add_test` to create a new test case. The script will prompt you for a description and reason for the test.
+    *   The script uses `load_configuration` to copy the relevant configuration files into the test directory.
+    *   The script uses `add_diffusion_subtests` to create subtests for different diffusion configurations.
+3.  **Configure the test:**
+    *   Navigate to the test directory using `source goto <test_id>`.
+    *   Modify the input files in the `inputs/` directory as needed.
+    *   Run `./set_cpu_cores` to set the number of CPU cores for the test.
+4.  **Compile the model:**
+    *   Run `./compile_test` to compile the model binary. This script manages dependencies and CPU core settings.
+5.  **Run the test:**
+    *   Run `./run_test` to execute the test. This script provides options for parallelization using OpenMP or MPI.
+6.  **Analyze the results:**
+    *   Inspect the output files in the `outputs/` directory.
+7.  **Manage the project:**
+    *   Use `./ttree` to view the test directory structure and test statuses.
+    *   Use `./add_branch` to create subtests for different configurations or scenarios.
+    *   Use `./remove_test` to remove a test case that is no longer needed.
+8.  **Synchronize with remote environments (optional):**
+    *   Use `./sync_configs`, `./sync_project`, and `./sync_symlinks` to synchronize the project directory and configuration files between your workstation and a remote HPC environment.
 
-### `add_branch.sh`
-
-**Overview:**  
-This script adds a branch (subtest) to the current test folder.
-
-**Features:**
-- **Root Directory Detection:** Automatically detects the project root directory by looking for `settings.yaml`.
-- **Branch Creation:** Creates a new branch test inside the current test directory.
-- **Metadata Update:** Updates the `metadata.yaml` file for the new branch test to reflect its parent test and name.
-- **Directory Structure:** Copies necessary files from the parent test to the new branch test and creates a `subtests` directory within the new branch.
-
----
-
-### `add_test.sh`
-
-**Overview:**  
-This script creates a new base test with the specified name and initializes its directory structure.
-
-**Features:**
-- **Root Directory Detection:** Automatically detects the project root directory by looking for `settings.yaml`.
-- **Test Creation:** Prompts the user for a test name and creates a new test directory.
-- **Dependency Management:** Extracts and copies dependencies specified in `settings.yaml` to the test directory.
-- **Metadata Creation:** Generates a `metadata.yaml` file for the new test, including test name, binary path, and dependencies.
-- **Dummy Binary Creation:** Creates a dummy binary for testing purposes if the compilation script is not found.
-
----
-
-### `goto.sh`
-
-**Overview:**  
-This script navigates to the directory of a specified test.
-
-**Features:**
-- **Root Directory Detection:** Automatically detects the project root directory by looking for `settings.yaml`.
-- **Test Directory Navigation:** Navigates to the directory of the specified test.
-- **Multiple Matches Handling:** If multiple tests with the same name exist, prompts the user to choose which one to navigate to.
-- **Root Test Directory Navigation:** If no test name is provided, navigates to the root test directory.
-
----
-
-### `initialize_project.sh`
-
-**Overview:**  
-This script initializes the project directory structure and creates the necessary configuration files.
-
-**Features:**
-- **Root Directory Detection:** Automatically detects the project root directory by looking for `settings.yaml`.
-- **Directory Structure Creation:** Creates `Tests` and `Binaries` directories.
-- **Settings File Creation:** Generates a `settings.yaml` file with project settings, including paths to dependencies and scripts.
-- **Force Reinitialization:** Supports a `-F` flag to force reinitialization, overwriting existing settings and directories.
-- **Compilation Script Check:** Verifies the existence and executability of the compilation script.
-
----
-
-### `remove_test.sh`
-
-**Overview:**  
-This script removes a specified test and its subtests, updating any tracking information.
-
-**Features:**
-- **Root Directory Detection:** Automatically detects the project root directory by looking for `settings.yaml`.
-- **Test Removal:** Removes the specified test and all its subtests.
-- **Metadata Update:** Updates the `metadata.yaml` file of the parent test to remove references to the deleted test.
-- **Binary Cleanup:** Checks if the binary associated with the test is used by any other test and removes it if not.
-- **Subtest Listing:** Lists all subtests before removal and prompts the user for confirmation.
-
----
-
-## Usage
-
-To use these scripts, ensure that `settings.yaml` is present in the project root directory. The scripts should be sourced or executed with the appropriate arguments as described in their respective overviews.
-
-**Example:**
-```bash
-source goto.sh test_name
-./add_test.sh new_test_name
+By following this workflow and utilizing the provided scripts, you can efficiently manage and execute a large suite of tests for your numerical model.
