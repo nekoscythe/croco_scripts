@@ -1,8 +1,8 @@
 #!/bin/bash
 
 # Define locations
-WORKSTATION_PATH="/home/mk7641/storage/ACCESS/ProductionRun"
-JUBAIL_HPC_PATH="/scratch/mk7641/ProductionRun"
+WORKSTATION_PATH="/home/mk7641/storage/ACCESS/ProductionTests"
+JUBAIL_HPC_PATH="/scratch/mk7641/ProductionTests"
 JUBAIL_HOST="mk7641@jubail.abudhabi.nyu.edu"
 
 HPC_SYMLINK_PREFIX="/scratch/mk7641/croco_scripts/"
@@ -126,12 +126,13 @@ update_local_symlinks() {
 
 # Function to sync from Jubail HPC to Workstation (full copy)
 sync_from_hpc() {
+  echo ""
   echo "Syncing from Jubail HPC to Workstation..."
   
-  scp "$JUBAIL_HOST:$JUBAIL_HPC_PATH/$SETTINGS_FILE" "/tmp/destination_settings.yaml" > /dev/null 2>&1
+  scp "$JUBAIL_HOST:$JUBAIL_HPC_PATH/settings.yaml" "/tmp/destination_settings.yaml" > /dev/null 2>&1
   echo "Source project name: $SRC_PROJECT_NAME"
   DEST_PROJECT_NAME=$(extract_project_name "/tmp/destination_settings.yaml")
-
+  
   if [ "$SRC_PROJECT_NAME" != "$DEST_PROJECT_NAME" ]; then
     echo "Error: Project names do not match!"
     exit 1
@@ -150,9 +151,10 @@ sync_from_hpc() {
 
 # Function to sync from Workstation to Jubail HPC (only binaries & directory structure)
 sync_to_hpc() {
+  echo ""
   echo "Syncing from Workstation to Jubail HPC (excluding outputs)..."
   
-  scp "$JUBAIL_HOST:$JUBAIL_HPC_PATH/$SETTINGS_FILE" "/tmp/destination_settings.yaml" > /dev/null 2>&1
+  scp "$JUBAIL_HOST:$JUBAIL_HPC_PATH/settings.yaml" "/tmp/destination_settings.yaml" > /dev/null 2>&1
 
   DEST_PROJECT_NAME=$(extract_project_name "/tmp/destination_settings.yaml")
 
