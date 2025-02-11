@@ -1,8 +1,8 @@
 #!/bin/bash
 
 # Define locations
-WORKSTATION_PATH="/home/mk7641/storage/ACCESS/ProductionTests"
-JUBAIL_HPC_PATH="/scratch/mk7641/ProductionTests"
+WORKSTATION_TESTS_PATH="/home/mk7641/storage/ACCESS/ProductionTests"
+JUBAIL_HPC_TESTS_PATH="/scratch/mk7641/ProductionTests"
 JUBAIL_HOST="mk7641@jubail.abudhabi.nyu.edu"
 
 HPC_SYMLINK_PREFIX="/scratch/mk7641/croco_scripts/"
@@ -39,8 +39,8 @@ get_root_dir() {
 
 SETTINGS_FILE=$(get_root_dir)/settings.yaml
 SRC_PROJECT_NAME=$(extract_project_name "$SETTINGS_FILE")
-WORKSTATION_PATH="$WORKSTATION_PATH/$SRC_PROJECT_NAME"
-JUBAIL_HPC_PATH="$JUBAIL_HPC_PATH/$SRC_PROJECT_NAME"
+WORKSTATION_PATH="$WORKSTATION_TESTS_PATH/$SRC_PROJECT_NAME"
+JUBAIL_HPC_PATH="$JUBAIL_HPC_TESTS_PATH/$SRC_PROJECT_NAME"
 
 echo "Source project name: $SRC_PROJECT_NAME"
 echo "Workstation path: $WORKSTATION_PATH"
@@ -72,55 +72,70 @@ update_remote_symlinks() {
 
     '"
 
+  # --- Update 'outputs' symlinks in subtests ---
+  ssh "$JUBAIL_HOST" "find \"$JUBAIL_HPC_PATH/Tests\" -depth -name 'outputs' -type l -print0 | xargs -0 -I {} bash -c '
+    SOURCE_PREFIX_REMOTE=\"'\\\"$WORKSTATION_TESTS_PATH\\\"'\";  # Properly escaped and quoted
+    DEST_PREFIX_REMOTE=\"'\\\"$JUBAIL_HPC_TESTS_PATH\\\"'\";   # Properly escaped and quoted
+    target=\"\$(readlink {})\";
+
+    if [[ \"\$target\" == \"\$SOURCE_PREFIX_REMOTE\"* ]]; then
+      stripped_target=\"\${target#\$SOURCE_PREFIX_REMOTE}\";
+      echo \"Stripped target: \$stripped_target\";
+      new_target=\"\$DEST_PREFIX_REMOTE\$stripped_target\";
+      if [[ ! -e \"\$new_target\" ]]; then
+        echo \"Warning: Target \$new_target does not exist!\"
+      fi;
+      ln -snf \"\$new_target\" \"{}\";
+      if [[ ! -h \"{}\" ]]; then
+        echo \"Warning: {} is not a symlink after update!\"
+      fi;
+    else
+      stripped_target="\$target";
+    fi
+
+    '"
+
 }
 
 update_local_symlinks() {
-  local source_path="$WORKSTATION_PATH/Tests"  # Hardcoded source path
-  local source_prefix="$HPC_SYMLINK_PREFIX" # Hardcoded source prefix
-  local dest_prefix="$WORKSTATION_SYMLINK_PREFIX"   # Hardcoded destination prefix
+  local source_path="$WORKSTATION_PATH/Tests" # Base path for tests
+  local source_prefix="$HPC_SYMLINK_PREFIX" # Prefix to replace (source prefix - HPC)
+  local dest_prefix="$WORKSTATION_SYMLINK_PREFIX"   # Prefix to replace with (destination prefix - Workstation)
 
   echo "Modifying symlinks in $source_path..."
 
-  # cd to the source directory
-  cd "$source_path"
-  echo "Current directory: $(pwd)"
+  # --- Update .nc symlinks recursively ---
+  find "$source_path" -type l -name '*.nc' -print0 | while IFS= read -r -d $'\0' symlink_path; do
+    target=$(readlink "$symlink_path")
 
-  local local_test_dir="$WORKSTATION_PATH/Tests"  # Hardcoded source path
-  local source_prefix="$HPC_SYMLINK_PREFIX" # Hardcoded source prefix
-  local dest_prefix="$WORKSTATION_SYMLINK_PREFIX"   # Hardcoded destination prefix
+    if [[ "$target" == "$source_prefix"* ]]; then
+      stripped_target="${target#$source_prefix}"
+      new_target="$dest_prefix$stripped_target"
+      ln -snf "$new_target" "$symlink_path"
+    else
+      stripped_target="$target";
+    fi
+  done
 
-  echo "Modifying symlinks in $local_test_dir..."
+  echo ""
+  echo "--- Processing 'outputs' symlinks - Simpler version ---"
 
-  # iterate over all the directories in the Tests directory
-  for test_dir in $local_test_dir/*; do
-    #goto the inputs directory of the test directory
-    echo "Processing $test_dir"
-    #iterate over all the files in the inputs directory that are .nc files
-    for file in $test_dir/inputs/*.nc; do
-      #get the target of the symlink
-      target=$(readlink "$file")
-      echo "Processing $file -> $target"
-      #check if the target is a symlink and if it starts with the source prefix
-      if [[ -L "$file" && "$target" == "$source_prefix"* ]]; then
-        #strip the source prefix from the target
-        stripped_target="${target#$source_prefix}"
-        #create the new target by adding the destination prefix to the stripped target
-        new_target="$dest_prefix$stripped_target"
-        #check if the new target exists
-        if [[ ! -e "$new_target" ]]; then
-          echo "Warning: Target $new_target does not exist!"
-          #continue to the next file
-          continue
-        fi
-        #update the symlink
-        ln -snf "$new_target" "$file"
-        #check if the file is still a symlink after updating
-        if [[ ! -h "$file" ]]; then
-          echo "Warning: $file is not a symlink after update!"
-        fi
-      fi
-      done
-    done
+  local source_prefix="$JUBAIL_HPC_TESTS_PATH" # Prefix to replace (source prefix - HPC)
+  local dest_prefix="$WORKSTATION_TESTS_PATH"   # Prefix to replace with (destination prefix - Workstation)
+
+  # --- Update 'outputs' symlinks recursively - Simplified ---
+  find "$source_path" -depth -name 'outputs' -type l -print0 | while IFS= read -r -d $'\0' symlink_path; do
+    target=$(readlink "$symlink_path")
+
+
+    if [[ "$target" == "$source_prefix"* ]]; then
+      stripped_target="${target#$source_prefix}"
+      new_target="$dest_prefix$stripped_target"
+      ln -snf "$new_target" "$symlink_path"
+    else
+      stripped_target="$target";
+    fi
+  done
 }
 
 
@@ -139,7 +154,7 @@ sync_from_hpc() {
   fi
 
   # Sync only the Binaries and Tests directories
-  rsync -avz --ignore-existing \
+  rsync -az --ignore-existing \
     --include="Tests/**" \
     --include="Binaries/**" \
     "$JUBAIL_HOST:$JUBAIL_HPC_PATH/" "$WORKSTATION_PATH/"
@@ -163,7 +178,7 @@ sync_to_hpc() {
     exit 1
   fi
 
-  rsync -avz --ignore-existing \
+  rsync -az --ignore-existing \
     --include="Tests/**" \
     --exclude="Tests/**/outputs/**" \
     "$WORKSTATION_PATH/" "$JUBAIL_HOST:$JUBAIL_HPC_PATH/"
