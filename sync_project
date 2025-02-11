@@ -117,9 +117,6 @@ update_local_symlinks() {
     fi
   done
 
-  echo ""
-  echo "--- Processing 'outputs' symlinks - Simpler version ---"
-
   local source_prefix="$JUBAIL_HPC_TESTS_PATH" # Prefix to replace (source prefix - HPC)
   local dest_prefix="$WORKSTATION_TESTS_PATH"   # Prefix to replace with (destination prefix - Workstation)
 
