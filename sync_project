@@ -214,7 +214,7 @@ sync_from_hpc() {
     fi
 
     # Perform actual sync (remove `-n` for real sync)
-    rsync -avh $RSYNC_OPTIONS "$JUBAIL_HOST:$JUBAIL_HPC_PATH/Tests/" "$WORKSTATION_PATH/Tests/"
+    rsync -avh --info=progress2 --no-inc-recursive $RSYNC_OPTIONS "$JUBAIL_HOST:$JUBAIL_HPC_PATH/Tests/" "$WORKSTATION_PATH/Tests/"
 
     update_local_symlinks
     echo "Sync from HPC complete!"
@@ -272,7 +272,7 @@ sync_to_hpc() {
     fi
 
     # Execute the sync
-    rsync -avh $RSYNC_OPTIONS "$WORKSTATION_PATH/Tests" "$JUBAIL_HOST:$JUBAIL_HPC_PATH"
+    rsync -avh --info=progress2 --no-inc-recursive $RSYNC_OPTIONS "$WORKSTATION_PATH/Tests" "$JUBAIL_HOST:$JUBAIL_HPC_PATH"
 
     update_remote_symlinks
     echo "Sync to HPC complete!"
