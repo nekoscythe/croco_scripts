@@ -175,7 +175,7 @@
 #  define QCORRECTION
 #  define SFLX_CORR
 #  undef  SFLX_CORR_COEF
-#  undef ANA_DIURNAL_SW
+#  define ANA_DIURNAL_SW
 # endif
 # undef  SFLUX_CFB
 # undef  SEA_ICE_NOFLUX
