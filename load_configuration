@@ -85,11 +85,12 @@ copy_files() {
 
   local grid_src=$(yq e ".Resolutions.\"$resolution\".input_grd" "$CONFIG_FILE" 2>/dev/null)
   local forcing_src=$(yq e ".Resolutions.\"$resolution\".input_frc" "$CONFIG_FILE" 2>/dev/null)
-  local infile_src=$(yq e ".Resolutions.\"$resolution\".infile" "$CONFIG_FILE" 2>/dev/null)
   local cppdefs_src=$(yq e ".Resolutions.\"$resolution\".cppdefs_$bio_physics" "$CONFIG_FILE" 2>/dev/null)
   local param_src=$(yq e ".Resolutions.\"$resolution\".param" "$CONFIG_FILE" 2>/dev/null)
   
   local restart_src=$(yq e ".InitialConditions.\"$initial_condition\".input_rst_$resolution" "$CONFIG_FILE" 2>/dev/null)
+  local infile_src=$(yq e ".InitialConditions.\"$initial_condition\".infile_$resolution" "$CONFIG_FILE" 2>/dev/null)
+
   local description_src=$(yq e ".InitialConditions.\"$initial_condition\".Description" "$CONFIG_FILE" 2>/dev/null)
 
   # Create symbolic links or copy files

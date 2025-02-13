@@ -2,21 +2,18 @@ Resolutions:
   hires:
     input_grd: "Resolutions/hires/input_grd.nc"
     input_frc: "Resolutions/hires/input_frc.nc"
-    infile: "Resolutions/hires/infile.in"
     cppdefs_biology: "Resolutions/hires/cppdefs_biology.h"
     cppdefs_physics: "Resolutions/hires/cppdefs_physics.h"
     param: "Resolutions/hires/param.h"
   medres:
     input_grd: "Resolutions/medres/input_grd.nc"
     input_frc: "Resolutions/medres/input_frc.nc"
-    infile: "Resolutions/medres/infile.in"
     cppdefs_biology: "Resolutions/medres/cppdefs_biology.h"
     cppdefs_physics: "Resolutions/medres/cppdefs_physics.h"
     param: "Resolutions/medres/param.h"
   lowres:
     input_grd: "Resolutions/lowres/input_grd.nc"
     input_frc: "Resolutions/lowres/input_frc.nc"
-    infile: "Resolutions/lowres/infile.in"
     cppdefs_biology: "Resolutions/lowres/cppdefs_biology.h"
     cppdefs_physics: "Resolutions/lowres/cppdefs_physics.h"
     param: "Resolutions/lowres/param.h"
@@ -27,6 +24,9 @@ InitialConditions:
     input_rst_hires: "InitialConditions/Config1/input_rst_hires.nc"
     input_rst_medres: "InitialConditions/Config1/input_rst_medres.nc"
     input_rst_lowres: "InitialConditions/Config1/input_rst_lowres.nc"
+    infile_hires: "InitialConditions/Config1/infile_hires.in"
+    infile_medres: "InitialConditions/Config1/infile_medres.in"
+    infile_lowres: "InitialConditions/Config1/infile_lowres.in"
     Description: "InitialConditions/Config1/Description.txt"
 
 Diffusion:

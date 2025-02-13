@@ -15,11 +15,11 @@ read -p "Enter choice [1 or 2]: " choice
 if [[ "$choice" == "1" ]]; then
   # Sync from Jubail HPC → Workstation
   echo "Syncing from Jubail HPC → Workstation..."
-  rsync -avz --ignore-existing "$JUBAIL_HOST:$JUBAIL_HPC_PATH/" "$WORKSTATION_PATH/"
+  rsync -avz --delete "$JUBAIL_HOST:$JUBAIL_HPC_PATH/" "$WORKSTATION_PATH/"
 elif [[ "$choice" == "2" ]]; then
   # Sync from Workstation → Jubail HPC
   echo "Syncing from Workstation → Jubail HPC..."
-  rsync -avz --ignore-existing "$WORKSTATION_PATH/" "$JUBAIL_HOST:$JUBAIL_HPC_PATH/"
+  rsync -avz --delete "$WORKSTATION_PATH/" "$JUBAIL_HOST:$JUBAIL_HPC_PATH/"
 else
   echo "Invalid choice. Exiting..."
   exit 1
