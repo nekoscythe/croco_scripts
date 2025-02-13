@@ -21,7 +21,7 @@ restart:          NRST, NRPFRST / filename
     outputs/output_rst.nc
     
 history: LDEFHIS, NWRT, NRPFHIS / filename 
-            T      576     0
+            T      144     0
     outputs/output_his.nc
 averages: NTSAVG, NAVG, NRPFAVG / filename
             1      2880     0
