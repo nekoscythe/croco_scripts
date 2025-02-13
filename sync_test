@@ -1,0 +1,230 @@
+#!/bin/bash
+#source the symlink script
+source /home/mk7641/storage/ACCESS/croco_scripts/sync_symlinks --source-only
+
+# Define locations
+WORKSTATION_TESTS_PATH="/home/mk7641/storage/ACCESS/ProductionTests"
+JUBAIL_HPC_TESTS_PATH="/scratch/mk7641/ProductionTests"
+JUBAIL_HOST="mk7641@jubail.abudhabi.nyu.edu"
+
+HPC_SYMLINK_PREFIX="/scratch/mk7641/croco_scripts/"
+WORKSTATION_SYMLINK_PREFIX="/home/mk7641/storage/ACCESS/croco_scripts/"
+
+# Function to extract project name from settings.yaml
+extract_project_name() {
+  local settings_file="$1"
+  local root_dir
+  root_dir=$(grep "root_dir:" "$settings_file" | awk -F'"' '{print $2}')
+  
+  if [[ -z "$root_dir" ]]; then
+    echo "Error: Could not extract root_dir from $settings_file"
+    exit 1
+  fi
+
+  echo "$(basename "$root_dir")"
+}
+
+get_root_dir() {
+    local dir="$(pwd)"
+    while [[ ! -f "$dir/settings.yaml" && "$dir" != "/" ]]; do
+        dir=$(dirname "$dir")  # Move up one directory level
+    done
+
+    if [[ -f "$dir/settings.yaml" ]]; then
+        echo "$dir"
+    else
+        echo "Error: settings.yaml not found in any parent directory."
+        exit 1
+    fi
+}
+
+get_tests_dir() {
+    local root_dir="$1"
+    local settings_file="$root_dir/settings.yaml"
+
+    if ! command -v yq >/dev/null 2>&1; then
+        echo "Error: yq is required but not installed."
+        exit 1
+    fi
+
+    if [[ ! -f "$settings_file" ]]; then
+        echo "Error: Settings file not found."
+        exit 1
+    fi
+
+    yq eval '.project.tests_dir' "$settings_file" | xargs
+}
+
+# Test finding functions
+find_matching_test_by_id() {
+    local test_id="$1"
+    local search_dir="$2"
+    local matches=()
+
+    while IFS= read -r metadata_path; do
+        if [[ -f "$metadata_path" ]]; then
+            local current_test_id
+            current_test_id=$(yq eval '.test_id' "$metadata_path" | xargs) || continue
+            
+            if [[ "$current_test_id" == "$test_id" ]]; then
+                matches+=("$(dirname "$metadata_path")")
+            fi
+        fi
+    done < <(find "$search_dir" -name metadata.yaml 2>/dev/null)
+
+    # Return results
+    if [[ ${#matches[@]} -eq 0 ]]; then
+        echo "Error: No matching test found."
+        exit 1
+    elif [[ ${#matches[@]} -gt 1 ]]; then
+        echo "Multiple matches found. Please select one:"
+        select choice in "${matches[@]}"; do
+            if [[ -n "$choice" ]]; then
+                echo "$choice"
+                return 0
+            fi
+        done
+    else
+        echo "${matches[0]}"
+        return 0
+    fi
+}
+
+get_relative_test_path() {
+    local test_path="$1"
+    local project_path="$2"
+    echo "${test_path#$project_path/}"
+}
+
+
+
+# Get project settings
+SETTINGS_FILE=$(get_root_dir)/settings.yaml
+SRC_PROJECT_NAME=$(extract_project_name "$SETTINGS_FILE")
+WORKSTATION_PATH="$WORKSTATION_TESTS_PATH/$SRC_PROJECT_NAME"
+JUBAIL_HPC_PATH="$JUBAIL_HPC_TESTS_PATH/$SRC_PROJECT_NAME"
+TESTS_DIR=$(get_tests_dir "$(get_root_dir)")
+PROJECT_PATH=$(get_root_dir)
+
+copy_to_jubail() {
+    local relative_test_path="$1"
+    local source_test_path="$WORKSTATION_TESTS_PATH/$SRC_PROJECT_NAME/$relative_test_path"
+    local dest_test_path="$JUBAIL_HPC_TESTS_PATH/$SRC_PROJECT_NAME/$(dirname "$relative_test_path")/"
+
+    echo "Performing dry run for syncing $relative_test_path to Jubail HPC..."
+
+    # Find all symlinks inside the outputs/ directory
+    symlinks=($(find "$source_test_path/outputs" -type l 2>/dev/null))
+
+    # Print the symlinks
+    echo "Symlinks: ${symlinks[@]}"
+
+    # Dry run: Sync only the actual directories where symlinks point
+    for symlink in "${symlinks[@]}"; do
+        target=$(readlink -f "$symlink")
+        target_relative=$(realpath --relative-to="$WORKSTATION_TESTS_PATH/$SRC_PROJECT_NAME" "$target")
+
+        echo "Dry run: Syncing symlink target $target_relative"
+        rsync -avh --dry-run --stats "$WORKSTATION_TESTS_PATH/$SRC_PROJECT_NAME/$target_relative" "$JUBAIL_HOST:$JUBAIL_HPC_TESTS_PATH/$SRC_PROJECT_NAME/$(dirname "$target_relative")/"
+    done
+
+    # Dry run: Sync test directory while preserving symlinks
+    rsync -avh --dry-run --links --stats "$source_test_path" "$JUBAIL_HOST:$dest_test_path"
+
+    # Confirm with the user
+    read -p "Proceed with actual sync? (y/n): " confirm
+    if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
+        echo "Aborting."
+        exit 1
+    fi
+
+    # Perform actual sync
+    echo "Starting actual sync..."
+    for symlink in "${symlinks[@]}"; do
+        rsync -avh --stats "$WORKSTATION_TESTS_PATH/$SRC_PROJECT_NAME/$target_relative" "$JUBAIL_HOST:$JUBAIL_HPC_TESTS_PATH/$SRC_PROJECT_NAME/$(dirname "$target_relative")/"
+    done
+    rsync -avh --links --stats "$source_test_path" "$JUBAIL_HOST:$dest_test_path"
+}
+
+
+
+
+
+
+copy_from_jubail() {
+    local relative_test_path="$1"
+    local source_test_path="$JUBAIL_HPC_TESTS_PATH/$SRC_PROJECT_NAME/$relative_test_path"
+    local dest_test_path="$WORKSTATION_TESTS_PATH/$SRC_PROJECT_NAME/$(dirname "$relative_test_path")/"
+
+    echo "Performing dry run for syncing $relative_test_path from Jubail HPC..."
+
+    # Find symlinks inside the outputs/ directory on Jubail
+    symlinks=($(ssh "$JUBAIL_HOST" "find '$source_test_path/outputs' -type l 2>/dev/null"))
+
+    #print the symlinks
+    echo "Symlinks: ${symlinks[@]}"
+
+
+    # Dry run: Sync only the actual directories where symlinks point
+    for symlink in "${symlinks[@]}"; do
+        target=$(ssh "$JUBAIL_HOST" "readlink -f '$symlink'")
+        target_relative=$(ssh "$JUBAIL_HOST" "realpath --relative-to='$JUBAIL_HPC_TESTS_PATH/$SRC_PROJECT_NAME' '$target'")
+
+        echo "Dry run: Syncing symlink target $target_relative"
+        rsync -avh --dry-run --stats "$JUBAIL_HOST:$JUBAIL_HPC_TESTS_PATH/$SRC_PROJECT_NAME/$target_relative" "$WORKSTATION_TESTS_PATH/$SRC_PROJECT_NAME/$(dirname "$target_relative")/"
+    done
+
+    # Dry run: Sync test directory while preserving symlinks
+    rsync -avh --dry-run --links --stats "$JUBAIL_HOST:$source_test_path" "$dest_test_path"
+
+    # Confirm with the user
+    read -p "Proceed with actual sync? (y/n): " confirm
+    if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
+        echo "Aborting."
+        exit 1
+    fi
+
+    # Perform actual sync
+    echo "Starting actual sync..."
+    for symlink in "${symlinks[@]}"; do
+        rsync -avh --stats "$JUBAIL_HOST:$JUBAIL_HPC_TESTS_PATH/$SRC_PROJECT_NAME/$target_relative" "$WORKSTATION_TESTS_PATH/$SRC_PROJECT_NAME/$(dirname "$target_relative")/"
+    done
+    rsync -avh --links --stats "$JUBAIL_HOST:$source_test_path" "$dest_test_path"
+}
+
+
+
+
+
+echo "Source project name: $SRC_PROJECT_NAME"
+
+# Prompt user for sync direction
+echo "Choose sync direction:"
+echo "1) Sync from Jubail HPC → Workstation"
+echo "2) Sync from Workstation → Jubail HPC"
+read -p "Enter choice: " choice
+
+# Prompt user for test ID
+read -p "Enter test ID: " test_id
+
+# Find matching test
+matching_test=$(find_matching_test_by_id "$test_id" "$WORKSTATION_PATH")
+
+# Get relative path
+matching_test_relative_path=$(get_relative_test_path "$matching_test" "$PROJECT_PATH")
+
+echo "Matching test: $matching_test_relative_path"
+
+# Execute sync
+case $choice in
+    1)
+        copy_from_jubail "$matching_test_relative_path"
+        ;;
+    2)
+        copy_to_jubail "$matching_test_relative_path"
+        ;;
+    *)
+        echo "Invalid choice. Aborting."
+        exit 1
+        ;;
+esac
