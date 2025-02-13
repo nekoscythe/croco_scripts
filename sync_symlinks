@@ -42,9 +42,7 @@ SRC_PROJECT_NAME=$(extract_project_name "$SETTINGS_FILE")
 WORKSTATION_PATH="$WORKSTATION_TESTS_PATH/$SRC_PROJECT_NAME"
 JUBAIL_HPC_PATH="$JUBAIL_HPC_TESTS_PATH/$SRC_PROJECT_NAME"
 
-echo "Source project name: $SRC_PROJECT_NAME"
-echo "Workstation path: $WORKSTATION_PATH"
-echo "Jubail HPC path: $JUBAIL_HPC_PATH"
+
 
 update_remote_symlinks() {
 
@@ -136,6 +134,9 @@ update_local_symlinks() {
 
 # if running as a script
 if [ "${1}" != "--source-only" ]; then
+  echo "Source project name: $SRC_PROJECT_NAME"
+  echo "Workstation path: $WORKSTATION_PATH"
+  echo "Jubail HPC path: $JUBAIL_HPC_PATH"
   update_local_symlinks
   update_remote_symlinks
 fi
