@@ -5,6 +5,7 @@ TEST_DIR="$(pwd)"
 METADATA_FILE="$TEST_DIR/metadata.yaml"
 LOG_FILE="$TEST_DIR/outputs/run_test.log"
 ARCHIVE_DIR="$TEST_DIR/outputs/archive"
+echo "TEST_DIR: $TEST_DIR"
 
 # Check if metadata.yaml exists
 if [[ ! -f "$METADATA_FILE" ]]; then
@@ -31,6 +32,7 @@ BINARY_PATH=$(yq eval '.binary_path' "$METADATA_FILE")
 
 # Convert paths to relative format
 REL_INPUT_FILE="inputs/infile.in"
+ABS_INPUT_FILE="$TEST_DIR/$REL_INPUT_FILE"
 
 # Check if the binary exists
 if [[ ! -f "$BINARY_PATH" ]]; then
@@ -102,12 +104,14 @@ get_slurm_walltime() {
 
 
 # Read the contents of infile to be added as part of each run log
-INPUT_FILE_CONTENTS=$(cat "$REL_INPUT_FILE")
+INPUT_FILE_CONTENTS=$(cat "$ABS_INPUT_FILE")
+
+
 
 # Add separator and input file contents to the log
 echo "============================================" >> "$LOG_FILE"
 echo "Run started for test: $TEST_NAME" >> "$LOG_FILE"
-echo "Input File: $REL_INPUT_FILE" >> "$LOG_FILE"
+echo "Input File: $ABS_INPUT_FILE" >> "$LOG_FILE"
 echo "============================================" >> "$LOG_FILE"
 echo "$INPUT_FILE_CONTENTS" >> "$LOG_FILE"
 echo "============================================" >> "$LOG_FILE"
@@ -119,13 +123,13 @@ case $PARALLEL_MODE in
         NUM_CORES=$(get_num_cores)
         export OMP_NUM_THREADS="$NUM_CORES"
         echo "Running test with OMP_NUM_THREADS=$OMP_NUM_THREADS..."
-        "$BINARY_PATH" "$REL_INPUT_FILE"
+        "$BINARY_PATH" "$ABS_INPUT_FILE"
         ;;
     2)
         # Get number of cores for MPI from metadata.yaml
         NUM_CORES=$(yq eval '.Config.cpu_cores' "$METADATA_FILE")
         echo "Running test with MPI using mpirun ($NUM_CORES processes)..."
-        mpirun -n "$NUM_CORES" "$BINARY_PATH" "$REL_INPUT_FILE"
+        mpirun -n "$NUM_CORES" "$BINARY_PATH" "$ABS_INPUT_FILE"
         ;;
     3)
         NUM_CORES=$(yq eval '.Config.cpu_cores' "$METADATA_FILE")
@@ -153,8 +157,7 @@ case $PARALLEL_MODE in
         echo "module load netcdf-fortran/4.6.1" >> "$JOB_SCRIPT"
         echo "module load netcdf-c/4.9.0" >> "$JOB_SCRIPT"
         echo "#Run command" >> "$JOB_SCRIPT"
-        echo "srun $BINARY_PATH $REL_INPUT_FILE | tee -a outputs/run_test.log" >> "$JOB_SCRIPT"
-
+        echo "srun $BINARY_PATH $ABS_INPUT_FILE | tee -a outputs/run_test.log" >> "$JOB_SCRIPT"
         #submit the job
         sbatch "$JOB_SCRIPT"
 
