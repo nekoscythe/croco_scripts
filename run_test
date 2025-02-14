@@ -16,6 +16,10 @@ fi
 mkdir -p "$TEST_DIR/outputs"
 mkdir -p "$ARCHIVE_DIR"
 
+# renew the log file in case it already exists
+if [[ -f "$LOG_FILE" ]]; then
+    rm "$LOG_FILE"
+fi
 # Redirect output to the log file
 exec > >(tee "$LOG_FILE") 2>&1
 
@@ -96,6 +100,19 @@ get_slurm_walltime() {
 }
 
 
+
+# Read the contents of infile to be added as part of each run log
+INPUT_FILE_CONTENTS=$(cat "$INPUT_FILE")
+
+# Add separator and input file contents to the log
+echo "============================================" >> "$LOG_FILE"
+echo "Run started for test: $TEST_NAME" >> "$LOG_FILE"
+echo "Input File: $REL_INPUT_FILE" >> "$LOG_FILE"
+echo "============================================" >> "$LOG_FILE"
+echo "$INPUT_FILE_CONTENTS" >> "$LOG_FILE"
+echo "============================================" >> "$LOG_FILE"
+
+
 # Execute based on chosen parallelization framework
 case $PARALLEL_MODE in
     1)
@@ -136,7 +153,7 @@ case $PARALLEL_MODE in
         echo "module load netcdf-fortran/4.6.1" >> "$JOB_SCRIPT"
         echo "module load netcdf-c/4.9.0" >> "$JOB_SCRIPT"
         echo "#Run command" >> "$JOB_SCRIPT"
-        echo "srun $BINARY_PATH $REL_INPUT_FILE | tee outputs/run_test.log" >> "$JOB_SCRIPT"
+        echo "srun $BINARY_PATH $REL_INPUT_FILE | tee -a outputs/run_test.log" >> "$JOB_SCRIPT"
 
         #submit the job
         sbatch "$JOB_SCRIPT"
