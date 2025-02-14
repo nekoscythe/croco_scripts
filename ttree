@@ -37,24 +37,26 @@ build_test_tree() {
     local STATUS=""
 
     if [[ ! -f "$LOG_FILE" ]]; then
-        STATUS_COLOR="\e[33m"  # Yellow (Not Run)
-        STATUS="[Not Run]"
-    else
-        local LAST_LINE=$(tail -n 1 "$LOG_FILE")
-        local HAS_EXECUTION_STARTED=$(grep -q "started time-stepping" "$LOG_FILE" && echo "yes" || echo "no")
-        local HAS_EXECUTION_COMPLETED=$(grep -q "MAIN: DONE" "$LOG_FILE" && echo "yes" || echo "no")
-
-        if [[ "$LAST_LINE" =~ ^Error ]]; then
-            STATUS_COLOR="\e[31m"  # Red (Failed)
-            STATUS="[Failed]"
-        elif [[ "$HAS_EXECUTION_STARTED" == "yes" && "$HAS_EXECUTION_COMPLETED" == "no" ]]; then
-            STATUS_COLOR="\e[35m"  # Magenta (Interrupted)
-            STATUS="[Running or Interrupted]"
-        else
+    STATUS_COLOR="\e[33m"  # Yellow (Not Run)
+    STATUS="[Not Run]"
+else
+    local LAST_LINE=$(tail -n 1 "$LOG_FILE")
+    if grep -q "Error" "$LOG_FILE"; then  # Check for errors first
+        STATUS_COLOR="\e[31m"  # Red (Failed)
+        STATUS="[Failed]"
+    elif grep -q "started time-stepping" "$LOG_FILE"; then  # Check if started
+        if grep -q "MAIN: DONE" "$LOG_FILE"; then  # Check if completed
             STATUS_COLOR="\e[32m"  # Green (Passed)
             STATUS="[Passed]"
+        else  # Started but not finished
+            STATUS_COLOR="\e[35m"  # Magenta (Running)
+            STATUS="[Running]"
         fi
+    else # Log file exists, but doesn't have "started time-stepping"
+        STATUS_COLOR="\e[36m" # Cyan (Unknown/Incomplete)
+        STATUS="[Incomplete/Unknown]"
     fi
+fi
 
     # Print test entry with color
     if [[ "$IS_LAST" == "true" ]]; then
