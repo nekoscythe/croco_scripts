@@ -120,7 +120,7 @@ case $PARALLEL_MODE in
         echo "Running test with MPI using SLURM srun ($NUM_CORES processes)..."
 
         #create the job script
-        JOB_SCRIPT="$ARCHIVE_DIR/job_$TEST_ID.sh"
+        JOB_SCRIPT="$ARCHIVE_DIR/job_$TEST_ID.job"
         echo "#!/bin/bash" > "$JOB_SCRIPT"
         echo "#SBATCH --ntasks=$NUM_CORES" >> "$JOB_SCRIPT"
         echo "#SBATCH --nodes=$NUM_NODES" >> "$JOB_SCRIPT"
