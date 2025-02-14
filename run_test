@@ -102,7 +102,7 @@ get_slurm_walltime() {
 
 
 # Read the contents of infile to be added as part of each run log
-INPUT_FILE_CONTENTS=$(cat "$INPUT_FILE")
+INPUT_FILE_CONTENTS=$(cat "$REL_INPUT_FILE")
 
 # Add separator and input file contents to the log
 echo "============================================" >> "$LOG_FILE"
