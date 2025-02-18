@@ -4,4 +4,6 @@
 *.py*
 *.png*
 !preprocess.py
+!preprocess_all.py
+
 

@@ -1,12 +1,13 @@
 import sys
 from utils.preprocessing_utils import load_and_preprocess
 
-# sys.argv[0] is the script name, sys.argv[1] is the first argument
-if len(sys.argv) > 1:
-    argument = sys.argv[1]
+# sys.argv[0] is the script name, get the two arguments
+if len(sys.argv) == 2:
+    path = sys.argv[1]
 else:
-    print("No argument provided.")
-    
+    print("Usage: python preprocess.py <path>")
+    sys.exit(1)
+
 # Load and preprocess the data
-load_and_preprocess(argument)
+load_and_preprocess(path)
 

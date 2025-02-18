@@ -1,0 +1,66 @@
+#!/bin/bash
+
+# find the root directory by locating settings.yaml
+get_root_dir() {
+    local DIR="$(pwd)"
+    while [[ ! -f "$DIR/settings.yaml" && "$DIR" != "/" ]]; do
+        DIR=$(dirname "$DIR")
+    done
+
+    if [[ -f "$DIR/settings.yaml" ]]; then
+        echo "$DIR"
+    else
+        echo "Error: Root directory not found. Ensure settings.yaml exists in the project root."
+        exit 1
+    fi
+}
+
+get_script_dir() {
+    echo "$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
+}
+
+PREPROCESS_ALL_SCRIPT="$(get_script_dir)/preprocess_all.py"
+
+TESTS_DIR="$(get_root_dir)/Tests"
+
+# Find all metadata.yaml files in the tests directory
+METADATA_FILES=($(find "$TESTS_DIR" -name "metadata.yaml"))
+
+# we can get the test directories by removing the metadata.yaml suffix
+TEST_DIRS=("${METADATA_FILES[@]/metadata.yaml/}")
+
+# we can get the output directories by appending outputs to the test directories
+OUTPUT_DIRS=("${TEST_DIRS[@]/%/outputs}")
+
+#Filter out the directories that do not have an output_his.nc file
+for i in "${!OUTPUT_DIRS[@]}"; do
+    if [[ ! -f "${OUTPUT_DIRS[$i]}/output_his.nc" ]]; then
+        unset TEST_DIRS[$i]
+        unset OUTPUT_DIRS[$i]
+    fi
+done
+
+# Filter out the directories that already have an output_his_preprocessed.nc file
+for i in "${!OUTPUT_DIRS[@]}"; do
+    if [[ -f "${OUTPUT_DIRS[$i]}/output_his_preprocessed.nc" ]]; then
+        unset TEST_DIRS[$i]
+        unset OUTPUT_DIRS[$i]
+    fi
+done
+
+# if there are no tests to preprocess, exit
+if [[ ${#TEST_DIRS[@]} -eq 0 ]]; then
+    echo "No tests to preprocess."
+    exit 0
+fi
+
+# print how many tests we have
+echo "Number of tests to preprocess: ${#TEST_DIRS[@]}"
+
+OUTPUT_DIRS=("${TEST_DIRS[@]/%/outputs}")
+HISTORY_FILES=("${OUTPUT_DIRS[@]/%//output_his.nc}")
+
+
+
+# pass all the history files to the preprocess script
+python3 "$PREPROCESS_ALL_SCRIPT" "${HISTORY_FILES[@]}"
