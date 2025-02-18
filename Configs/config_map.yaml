@@ -28,6 +28,14 @@ InitialConditions:
     infile_medres: "InitialConditions/Config1/infile_medres.in"
     infile_lowres: "InitialConditions/Config1/infile_lowres.in"
     Description: "InitialConditions/Config1/Description.txt"
+  Config2:
+    input_rst_hires: "InitialConditions/Config2/input_rst_hires.nc"
+    input_rst_medres: "InitialConditions/Config2/input_rst_medres.nc"
+    input_rst_lowres: "InitialConditions/Config2/input_rst_lowres.nc"
+    infile_hires: "InitialConditions/Config2/infile_hires.in"
+    infile_medres: "InitialConditions/Config2/infile_medres.in"
+    infile_lowres: "InitialConditions/Config2/infile_lowres.in"
+    Description: "InitialConditions/Config2/Description.txt"
 
 Diffusion:
   Control:
