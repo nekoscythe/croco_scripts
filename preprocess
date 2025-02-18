@@ -29,6 +29,14 @@ if [[ ! -f "$HISTORY_FILE" ]]; then
     exit 1
 fi
 
+# Check if the history file has already been preprocessed
+if [[ -f "$TEST_DIR/outputs/output_his_preprocessed.nc" ]]; then
+    echo "History file has already been preprocessed."
+    exit 0
+fi
+
+
+
 
 # Run the script
 python3 "$PYTHON_SCRIPT" "$HISTORY_FILE"
