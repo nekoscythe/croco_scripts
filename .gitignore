@@ -3,4 +3,5 @@
 *.ipynb*
 *.py*
 *.png*
+!preprocess.py
 
