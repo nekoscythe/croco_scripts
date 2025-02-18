@@ -33,8 +33,11 @@ build_test_tree() {
 
     # Determine test status
     local LOG_FILE="$DIR/outputs/run_test.log"
+    local PREPROCESSED_FILE="$DIR/outputs/output_his_preprocessed.nc"
     local STATUS_COLOR=""
     local STATUS=""
+
+    
 
     if [[ ! -f "$LOG_FILE" ]]; then
     STATUS_COLOR="\e[33m"  # Yellow (Not Run)
@@ -46,8 +49,14 @@ else
         STATUS="[Failed]"
     elif grep -q "started time-stepping" "$LOG_FILE"; then  # Check if started
         if grep -q "MAIN: DONE" "$LOG_FILE"; then  # Check if completed
-            STATUS_COLOR="\e[32m"  # Green (Passed)
-            STATUS="[Passed]"
+        # check if preprocessed file exists
+            if [[ -f "$PREPROCESSED_FILE" ]]; then
+                STATUS_COLOR="\e[92m"  # Bright Green (Passed and Preprocessed)
+                STATUS="[Passed and Preprocessed]"
+            else
+                STATUS_COLOR="\e[32m"  # Green (Passed)
+                STATUS="[Passed]"
+            fi
         else  # Started but not finished
             STATUS_COLOR="\e[35m"  # Magenta (Running)
             STATUS="[Running]"
