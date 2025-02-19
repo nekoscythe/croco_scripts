@@ -141,9 +141,9 @@ copy_to_jubail() {
     # Perform actual sync
     echo "Starting actual sync..."
     for symlink in "${symlinks[@]}"; do
-        rsync -avh --stats "$WORKSTATION_TESTS_PATH/$SRC_PROJECT_NAME/$target_relative" "$JUBAIL_HOST:$JUBAIL_HPC_TESTS_PATH/$SRC_PROJECT_NAME/$(dirname "$target_relative")/"
+        rsync -avh --stats --info=progress2 --no-i-r "$WORKSTATION_TESTS_PATH/$SRC_PROJECT_NAME/$target_relative" "$JUBAIL_HOST:$JUBAIL_HPC_TESTS_PATH/$SRC_PROJECT_NAME/$(dirname "$target_relative")/"
     done
-    rsync -avh --links --stats "$source_test_path" "$JUBAIL_HOST:$dest_test_path"
+    rsync -avh --links --info=progress2 --no-i-r "$source_test_path" "$JUBAIL_HOST:$dest_test_path"
 }
 
 
@@ -187,9 +187,9 @@ copy_from_jubail() {
     # Perform actual sync
     echo "Starting actual sync..."
     for symlink in "${symlinks[@]}"; do
-        rsync -avh --stats "$JUBAIL_HOST:$JUBAIL_HPC_TESTS_PATH/$SRC_PROJECT_NAME/$target_relative" "$WORKSTATION_TESTS_PATH/$SRC_PROJECT_NAME/$(dirname "$target_relative")/"
+        rsync -avh --stats --info=progress2 --no-i-r "$JUBAIL_HOST:$JUBAIL_HPC_TESTS_PATH/$SRC_PROJECT_NAME/$target_relative" "$WORKSTATION_TESTS_PATH/$SRC_PROJECT_NAME/$(dirname "$target_relative")/"
     done
-    rsync -avh --links --stats "$JUBAIL_HOST:$source_test_path" "$dest_test_path"
+    rsync -avh --links --info=progress2 --no-i-r "$JUBAIL_HOST:$source_test_path" "$dest_test_path"
 }
 
 
