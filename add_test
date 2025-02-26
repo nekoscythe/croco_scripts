@@ -143,7 +143,7 @@ main() {
     source "$SCRIPT_DIR/load_configuration"
     source "$SCRIPT_DIR/add_diffusion_subtests"
     # set the global variables how they are set in load_configuration
-    TEST_ID=$next_test_idf
+    TEST_ID=$next_test_id
     TEST_NAME=$test_name
     TEST_DIR=$test_path
 
@@ -165,27 +165,44 @@ main() {
 
     # Create metadata.yaml
     create_metadata_file "$test_path/metadata.yaml" "$next_test_id" "$test_name" "$description" "$reason"
-
-
-    copy_files "$SELECTED_RESOLUTION" "$SELECTED_BIO_PHYSICS" "$SELECTED_INITIAL_CONDITION"
+    
     cd "$test_path"
-    update_metadata
-    update_infile "$test_path/inputs/infile.in" "$next_test_id" "$reason"
-    add_diffusion_subtests 
+    # Create the resolution subtests
+    add_resolution_subtests
 
-
-    #iterate over all the subtests in the test
+    # cd into each subtest and create the diffusion subtests
     cd "subtests"
     for subtest in $(ls -d */); do
+        echo "subtest: $subtest"
         cd "$subtest"
+
+        #copy the files and pass the current directory to the function
+        copy_files "$SELECTED_BIO_PHYSICS" "$SELECTED_INITIAL_CONDITION" $(pwd)
+        #update the metadata
+        update_metadata
+        update_infile "$test_path/inputs/infile.in" "$next_test_id" "$reason"
+
+        # create the diffusion subtests
+        add_diffusion_subtests
         #get the name of the subtest by removing the trailing slash
         subtest=${subtest::-1}
-        subtest_metadata_file="metadata.yaml"
-        copy_diffusion_files $subtest $(pwd)
-        update_diffusion_metadata $subtest $subtest_metadata_file
-        cd ..
+
+        #iterate over all the subtests in the test
+        cd "subtests"
+        for subtest in $(ls -d */); do
+            cd "$subtest"
+            #get the name of the subtest by removing the trailing slash
+            subtest=${subtest::-1}
+            subtest_metadata_file="metadata.yaml"
+            copy_diffusion_files $subtest $(pwd)
+            update_diffusion_metadata $subtest $subtest_metadata_file
+            cd ..
+        done
+        cd ../ #get out of the diffusion subtests
+
+        cd .. #get out of the resolution subtest
     done
-    cd ../
+
 
     echo "Test '$test_name' created successfully."
 }

@@ -1,0 +1,55 @@
+#!/bin/bash
+# Creates resolution subtests for a given test
+
+get_root_dir() {
+    local dir="$(pwd)"
+    while [[ ! -f "$dir/settings.yaml" && "$dir" != "/" ]]; do
+        dir=$(dirname "$dir")
+    done
+
+    if [[ -f "$dir/settings.yaml" ]]; then
+        echo "$dir"
+    else
+        echo "Error: Root directory not found. Ensure settings.yaml exists in the project root." >&2
+        return 1
+    fi
+}
+
+create_resolution_subtests() {
+    local root_dir=$(get_root_dir) || return 1
+    
+    if [[ ! -f "metadata.yaml" ]]; then
+        echo "Error: Run this from a test directory containing metadata.yaml" >&2
+        return 1
+    fi
+    
+    declare -A configs=(
+        ["Hires"]="1km resolution"
+        ["Medres"]="4km resolution"
+        ["Lowres"]="16km resolution"
+    )
+
+    declare -A config_names=(
+        ["Hires"]="hires"
+        ["Medres"]="medres"
+        ["Lowres"]="lowres"
+    )
+    
+    local order=("Hires" "Medres" "Lowres")
+    
+    for config_name in "${order[@]}"; do
+        local description="${configs[$config_name]}"
+        
+        
+        echo "Creating $config_name subtest..."
+        echo "y" | add_branch -q "$config_name"
+        
+        local subtest_path="subtests/$config_name"
+        
+        yq eval ".Config.Resolution = \"${config_names[$config_name]}\"" -i "$subtest_path/metadata.yaml"
+    done
+}
+
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+    create_resolution_subtests
+fi
