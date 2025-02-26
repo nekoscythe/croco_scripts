@@ -207,9 +207,9 @@
 # define  UV_HADV_WENO5
 # undef  UV_HADV_TVD
                       /* Lateral Explicit Momentum Mixing */
-# undef  UV_VIS2
+# define UV_VIS2
 # ifdef UV_VIS2
-#  define UV_VIS_SMAGO
+#  undef UV_VIS_SMAGO
 # endif
                       /* Vertical Momentum Advection */
 # undef UV_VADV_SPLINES
@@ -385,9 +385,9 @@
                       /*   Choice of Biology models   */
 # ifdef BIOLOGY
 #  undef  PISCES
-#  undef  BIO_NChlPZD
+#  define  BIO_NChlPZD
 #  undef  BIO_N2ChlPZD2
-#  define BIO_BioEBUS
+#  undef BIO_BioEBUS
                       /*   Biology options    */
 #  ifdef PISCES
 #   undef  DIURNAL_INPUT_SRFLX
@@ -403,7 +403,7 @@
 #   define NITROUS_OXIDE
 #  endif
                       /*   Biology diagnostics    */
-#  define DIAGNOSTICS_BIO
+#  undef DIAGNOSTICS_BIO
 #  if defined DIAGNOSTICS_BIO && defined PISCES
 #   define key_trc_diaadd
 #  endif

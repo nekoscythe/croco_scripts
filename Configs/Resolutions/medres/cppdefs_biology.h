@@ -207,9 +207,9 @@
 # define  UV_HADV_WENO5
 # undef  UV_HADV_TVD
                       /* Lateral Explicit Momentum Mixing */
-# undef  UV_VIS2
+# define UV_VIS2
 # ifdef UV_VIS2
-#  define UV_VIS_SMAGO
+#  undef UV_VIS_SMAGO
 # endif
                       /* Vertical Momentum Advection */
 # undef UV_VADV_SPLINES
