@@ -45,16 +45,13 @@ rho0:
       1025.d0
 
 lateral_visc:   VISC2,    VISC4    [m^2/sec for all]
-                 0.       0.
+                 1.d2       0.
 
 tracer_diff2: TNU2(1:NT)           [m^2/sec for all]
-               40*1.d2 
+               50*1.d2
 
 tracer_diff4: TNU4(1:NT)           [m^4/sec for all]
                50*0.d11
-
-vertical_mixing: Akv_bak, Akt_bak [m^2/sec]
-                   0.d0    30*0.d0
 
 bottom_drag:     RDRG [m/s],  RDRG2,  Zob [m],  Cdb_min, Cdb_max
                  0.0d-04      1.d-3   0.d-2     0.d-4    0.d-1 
@@ -62,8 +59,4 @@ bottom_drag:     RDRG [m/s],  RDRG2,  Zob [m],  Cdb_min, Cdb_max
 gamma2:
                  1.d0
 
-sponge:          X_SPONGE [m],    V_SPONGE [m^2/sec]
-                    XXX               XXX  
 
-nudg_cof:    TauT_in, TauT_out, TauM_in, TauM_out  [days for all]
-                1.      360.      3.      360.
