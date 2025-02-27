@@ -92,9 +92,12 @@ update_infile() {
     local infile="$1"
     local test_id="$2"
     local test_reason="$3"
+    local safe_reason=$(echo "$test_reason" | sed 's/[&/]/\\&/g')
+    echo "$infile in $(pwd)"
 
     if [[ -f "$infile" ]]; then
-        sed -i "s|(To Be Modified by script, should be the same as test title and test number)|(ID: $test_id) $test_reason|g" "$infile"
+        sed -i "s|(To Be Modified by script, should be the same as test title and test number)|(ID: $test_id) $safe_reason|g" "$infile"
+
     else
         echo "Warning: infile.in not found in inputs. Skipping updates."
     fi
@@ -180,7 +183,8 @@ main() {
         copy_files "$SELECTED_BIO_PHYSICS" "$SELECTED_INITIAL_CONDITION" $(pwd)
         #update the metadata
         update_metadata
-        update_infile "$test_path/inputs/infile.in" "$next_test_id" "$reason"
+        reason_and_res="$reason #${subtest::-1}"
+        update_infile "inputs/infile.in" "$next_test_id" "$reason_and_res"
 
         # create the diffusion subtests
         add_diffusion_subtests
