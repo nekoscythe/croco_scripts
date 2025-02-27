@@ -1,0 +1,8 @@
+This configuration restarts from day 7285 (slice 84) in the 6 month daily restart file from the high resolution model.
+This file is stored at:
+/storagenas1/mk7641/ACCESS/TESTS/PHYSICS_HIRES/CROCO_FILES/run5/croco_his_3.nc
+
+The plankton is placed above the HBL at a concentration of 0.01 everywhere (same as config 3)
+
+The nutrient has a sinusoidal distribution across longitude (cos^2)
+
