@@ -245,6 +245,7 @@ case $PARALLEL_MODE in
         NUM_CORES=$(yq eval '.Config.cpu_cores' "$METADATA_FILE")
         NUM_NODES=$((NUM_CORES / 128))
         NUM_HOURS=$(get_slurm_walltime)
+        get_preempt
         echo "NUM_CORES: $NUM_CORES"
         echo "NUM_NODES: $NUM_NODES"
         echo "NUM_HOURS: $NUM_HOURS"
