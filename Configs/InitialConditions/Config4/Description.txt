@@ -5,4 +5,5 @@ This file is stored at:
 The plankton is placed above the HBL at a concentration of 0.01 everywhere (same as config 3)
 
 The nutrient has a sinusoidal distribution across longitude (cos^2)
+Nutrient is invariant in depth
 

@@ -1,6 +1,7 @@
 This configuration restarts from day 7285 (slice 84) in the 6 month daily restart file from the high resolution model.
 
-The plankton is placed within the hot vortex that crashes within some days into the jet.
+The plankton is placed within the hot vortex that crashes within some days into the jet (same as config1)
 
-The nutrient is placed on the colder side of the jet.
+The nutrient is at a constant value of 8 everywhere.
+
 
