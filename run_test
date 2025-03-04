@@ -251,7 +251,6 @@ case $PARALLEL_MODE in
         echo "NUM_HOURS: $NUM_HOURS"
         echo "PREEMPT PARTITION : $PREEMPT"
         echo "Running test with MPI using SLURM srun ($NUM_CORES processes)..."
-        exit 1
 
         #clean outputs first
         clean_outputs
