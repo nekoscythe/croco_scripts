@@ -175,7 +175,8 @@ PREEMPT=false
 get_preempt() {
     read -p "Do you want to run in preempt partition? (y/n): " CONFIRM
     if [[ ! "$CONFIRM" =~ ^[Yy]$ ]]; then
-    PREEMPT=true
+        echo "Setting to true"
+        echo true
     fi
 }
 
