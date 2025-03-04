@@ -170,6 +170,15 @@ get_slurm_walltime() {
     echo "$WALLTIME_HOURS"
 }
 
+PREEMPT=false
+
+get_preempt() {
+    read -p "Do you want to run in preempt partition? (y/n): " CONFIRM
+    if [[ ! "$CONFIRM" =~ ^[Yy]$ ]]; then
+    PREEMPT=true
+    fi
+}
+
 clean_outputs() {
     # Remove all files in the outputs directory while ignoring errors
     rm -f "$OUTPUTS_DIR/*" 2>/dev/null
@@ -239,6 +248,7 @@ case $PARALLEL_MODE in
         echo "NUM_CORES: $NUM_CORES"
         echo "NUM_NODES: $NUM_NODES"
         echo "NUM_HOURS: $NUM_HOURS"
+        echo "PREEMPT PARTITION : $PREEMPT"
         echo "Running test with MPI using SLURM srun ($NUM_CORES processes)..."
 
         #clean outputs first
@@ -250,6 +260,9 @@ case $PARALLEL_MODE in
         #create the job script
         JOB_SCRIPT="$ARCHIVE_DIR/job_$TEST_ID.job"
         echo "#!/bin/bash" > "$JOB_SCRIPT"
+        if [ "$PREEMPT" = true ] ; then
+        echo "#SBATCH -p preempt" >> "$JOB_SCRIPT"
+        fi
         echo "#SBATCH --ntasks=$NUM_CORES" >> "$JOB_SCRIPT"
         echo "#SBATCH --nodes=$NUM_NODES" >> "$JOB_SCRIPT"
         echo "#SBATCH --time=$NUM_HOURS:00:00" >> "$JOB_SCRIPT"
