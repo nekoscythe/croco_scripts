@@ -175,7 +175,6 @@ PREEMPT=false
 get_preempt() {
     read -p "Do you want to run in preempt partition? (y/n): " CONFIRM
     if [[ ! "$CONFIRM" = ^[Yy]$ ]]; then
-        echo "Setting to true"
         PREEMPT=true
     fi
 }
@@ -252,6 +251,7 @@ case $PARALLEL_MODE in
         echo "NUM_HOURS: $NUM_HOURS"
         echo "PREEMPT PARTITION : $PREEMPT"
         echo "Running test with MPI using SLURM srun ($NUM_CORES processes)..."
+        exit 1
 
         #clean outputs first
         clean_outputs
