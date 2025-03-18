@@ -76,6 +76,11 @@ create_metadata_file() {
     local test_name="$3"
     local description="$4"
     local reason="$5"
+    local settings_file="$6"
+
+    # Extract dependencies block from settings.yaml
+    local dependencies
+    dependencies=$(yq eval 'explode(.) | .dependencies' "$settings_file")
 
     cat >"$metadata_file" <<EOF
 test_id: $test_id
@@ -84,6 +89,8 @@ description: $description
 reason: $reason
 parent_test_id: null
 date: $(date +'%Y-%m-%d %H:%M:%S')
+dependencies:
+$dependencies
 EOF
 }
 
@@ -167,7 +174,7 @@ main() {
     create_test_directory "$test_path"
 
     # Create metadata.yaml
-    create_metadata_file "$test_path/metadata.yaml" "$next_test_id" "$test_name" "$description" "$reason"
+    create_metadata_file "$test_path/metadata.yaml" "$next_test_id" "$test_name" "$description" "$reason" "$settings_file"
     
     cd "$test_path"
     # Create the resolution subtests
