@@ -8,7 +8,7 @@ FULL_METADATA_FILE_PATH="$METADATA_FILE"
 # Function to check if metadata.yaml exists
 check_metadata_file() {
     if [[ ! -f "$METADATA_FILE" ]]; then
-        echo "Error: metadata.yaml not found in $TEST_DIR."
+        printf "Error: metadata.yaml not found in $TEST_DIR.\n" >&2
         exit 1
     fi
 }
@@ -23,7 +23,7 @@ get_root_dir() {
     if [[ -f "$dir/settings.yaml" ]]; then
         echo "$dir"
     else
-        echo "Error: settings.yaml not found in any parent directory."
+        printf "Error: settings.yaml not found in any parent directory.\n" >&2
         exit 1
     fi
 }
@@ -44,7 +44,7 @@ get_settings_file() {
     local root_dir=$1
     local settings_file="$root_dir/settings.yaml"
     if [[ ! -f "$settings_file" ]]; then
-        echo "Error: settings.yaml not found at $settings_file."
+        printf "Error: settings.yaml not found at $settings_file.\n" >&2
         exit 1
     fi
     echo "$settings_file"
@@ -83,7 +83,7 @@ manual_cpu_core_selection() {
             process_cores "$cpu_cores"
             break
         else
-            echo "Error: The number of CPU cores must be <= $total_cores."
+            printf "Error: The number of CPU cores must be <= $total_cores.\n" >&2
         fi
     done
 }
@@ -97,11 +97,11 @@ handle_dependencies() {
     if [[ -n "$metadata_dependencies" && "$metadata_dependencies" != "null" ]]; then
       # test dependencies in metadata.yaml
         dependencies="$metadata_dependencies"
-        echo "Using dependencies from metadata.yaml"
+        printf "Using dependencies from metadata.yaml\n" >&2
     else
         # Project-wide dependencies in settings.yaml
         dependencies=$(yq eval 'explode(.) | .dependencies' "$settings_file")
-        echo "Using project-wide dependencies from settings.yaml"
+        printf "Using project-wide dependencies from settings.yaml\n" >&2
     fi
     
     local dependency_count=$(echo "$dependencies" | yq eval 'length' -)
@@ -114,7 +114,7 @@ handle_dependencies() {
         local dep_dest="$dep_location/$dep_path"
         
         if [[ ! -f "$dep_source" ]]; then
-            echo "Error: Dependency not found at $dep_source."
+            printf "Error: Dependency not found at $dep_source.\n" >&2
             return 1 # Return a non-zero exit code to signal an error
         fi
         
@@ -160,13 +160,13 @@ find_existing_binary() {
     done
 
     if [[ -n "$warning_message" ]]; then  # Print warning message *outside* the function's main output
-        echo "$warning_message" >&2  # Send warning to stderr
+        printf "$warning_message\n" >&2  # Send warning to stderr
     fi
 
     if [[ -n "$found_hash_file" ]]; then
         echo "$found_hash_file"  # Only return the hash file if the binary exists
     else
-        echo ""
+        printf "\n"
     fi
 }
 
@@ -181,12 +181,12 @@ compile_binary() {
     if [[ -n "$debug_flag" ]]; then  # Check if debug flag is set
         "$compile_script"        # Run with output if debug is on
     else
-        echo "Compiling binary..."
+        printf "Compiling binary...\n"
         "$compile_script" > /dev/null 2>&1  # Suppress output if debug is off
     fi
 
     if [[ $? -ne 0 ]]; then
-        echo "Error: Compilation failed."
+        printf "Error: Compilation failed.\n"
         exit 1
     fi
 }
@@ -208,11 +208,11 @@ unset_parallel_file() {
 
     #check if the file exists
     if [[ ! -f "$cppdefs_file" ]]; then
-        echo "Error: cppdefs.h file not found at $cppdefs_file."
+        printf "Error: cppdefs.h file not found at $cppdefs_file.\n" >&2
         exit 1
     fi
 
-    echo "Unsetting parallel file..."
+    printf "Unsetting parallel file...\n" >&2
 
     # Find the line containing NC4PAR
     line=$(awk '/NC4PAR/ {print NR}' "$cppdefs_file")
@@ -223,7 +223,7 @@ unset_parallel_file() {
         sed -i "${line}s/define/undef/" "$cppdefs_file"
 
     else
-        echo "Error: NC4PAR not found in cppdefs.h."
+        printf "Error: NC4PAR not found in cppdefs.h.\n" >&2
         exit 1
     fi
 }
@@ -255,7 +255,7 @@ fi
 DEPENDENCY_HASHES=$(handle_dependencies "$SETTINGS_FILE")
 if [[ $? -ne 0 ]]; then
     DEPENDENCY_ERROR_MESSAGE=$(echo "$DEPENDENCY_HASHES" | grep "Error:")
-    echo "$DEPENDENCY_ERROR_MESSAGE"
+    printf "$DEPENDENCY_ERROR_MESSAGE\n" >&2
     exit 1
 fi
 BINARIES_DIR="$ROOT_DIR/$(get_metadata_value '.project.binaries_dir' "$SETTINGS_FILE")"
@@ -266,13 +266,13 @@ EXISTING_BINARY=$(find_existing_binary "$BINARIES_DIR" "$DEPENDENCY_HASHES")
 if [[ -n "$EXISTING_BINARY" ]]; then
     EXISTING_BINARY_PATH="${EXISTING_BINARY%.hashes}"
     yq eval ".binary_path = \"$EXISTING_BINARY_PATH\"" -i "$METADATA_FILE"
-    echo "Using existing binary."
+    printf "Using existing binary.\n" >&2
 else
     COMPILE_SCRIPT="$ROOT_DIR/$(get_metadata_value '.scripts.compile' "$SETTINGS_FILE")"
     compile_binary "$ROOT_DIR" "$COMPILE_SCRIPT" "$debug_flag"
     mv "$ROOT_DIR/croco" "$BINARY_DESTINATION"
     echo "$DEPENDENCY_HASHES" > "$BINARY_DESTINATION.hashes"
     yq eval ".binary_path = \"$BINARY_DESTINATION\"" -i "$FULL_METADATA_FILE_PATH"
-    echo "Binary compiled successfully."
+    printf "Binary compiled successfully.\n" >&2
     cleanup_files "$ROOT_DIR"
 fi
