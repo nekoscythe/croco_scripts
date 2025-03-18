@@ -88,13 +88,25 @@ manual_cpu_core_selection() {
     done
 }
 
-# Function to handle dependencies defined in settings.yaml
+# Function to handle dependencies defined in settings.yaml or metadata.yaml
 handle_dependencies() {
     local settings_file=$1
-    local dependencies=$(yq eval 'explode(.) | .dependencies' "$settings_file")
+    local dependencies=""
+    local metadata_dependencies=$(yq eval '.dependencies' "$METADATA_FILE" 2>/dev/null)
+
+    if [[ -n "$metadata_dependencies" && "$metadata_dependencies" != "null" ]]; then
+      # test dependencies in metadata.yaml
+        dependencies="$metadata_dependencies"
+        echo "Using dependencies from metadata.yaml"
+    else
+        # Project-wide dependencies in settings.yaml
+        dependencies=$(yq eval 'explode(.) | .dependencies' "$settings_file")
+        echo "Using project-wide dependencies from settings.yaml"
+    fi
+    
     local dependency_count=$(echo "$dependencies" | yq eval 'length' -)
     local dependency_hashes=""
-    
+
     for ((i = 0; i < dependency_count; i++)); do
         local dep_location=$(echo "$dependencies" | yq eval ".[$i].location" -)
         local dep_path=$(echo "$dependencies" | yq eval ".[$i].path" -)
@@ -103,7 +115,7 @@ handle_dependencies() {
         
         if [[ ! -f "$dep_source" ]]; then
             echo "Error: Dependency not found at $dep_source."
-            exit 1
+            return 1 # Return a non-zero exit code to signal an error
         fi
         
         # Compute hash of the dependency file
@@ -114,6 +126,7 @@ handle_dependencies() {
     done
     
     echo "$dependency_hashes"
+    return 0 # Return 0 to signal success
 }
 
 find_existing_binary() {
@@ -240,6 +253,11 @@ else
 fi
 
 DEPENDENCY_HASHES=$(handle_dependencies "$SETTINGS_FILE")
+if [[ $? -ne 0 ]]; then
+    DEPENDENCY_ERROR_MESSAGE=$(echo "$DEPENDENCY_HASHES" | grep "Error:")
+    echo "$DEPENDENCY_ERROR_MESSAGE"
+    exit 1
+fi
 BINARIES_DIR="$ROOT_DIR/$(get_metadata_value '.project.binaries_dir' "$SETTINGS_FILE")"
 BINARY_DESTINATION="$BINARIES_DIR/$(get_metadata_value '.test_name' "$METADATA_FILE")_$(get_metadata_value '.test_id' "$METADATA_FILE")"
 EXISTING_BINARY=$(find_existing_binary "$BINARIES_DIR" "$DEPENDENCY_HASHES")
