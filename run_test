@@ -85,8 +85,18 @@ done < "$COMPANION_FILE"
 
 # Read the dependencies from settings.yaml
 
-DEPENDENCY_LOCATIONS=($(yq eval-all 'explode(.) | .dependencies[].location' "$SETTINGS_FILE"))
-DEPENDENCY_PATHS=($(yq eval-all 'explode(.) | .dependencies[].path' "$SETTINGS_FILE"))
+# First try to get dependencies from metadata.yaml file in the test
+if yq eval '.dependencies' "$METADATA_FILE" | grep -q -v "null"; then
+    # Metadata file has dependencies, use them
+    DEPENDENCY_LOCATIONS=($(yq eval-all 'explode(.) | .dependencies[].location' "$METADATA_FILE"))
+    DEPENDENCY_PATHS=($(yq eval-all 'explode(.) | .dependencies[].path' "$METADATA_FILE"))
+    echo "Using test-specific dependencies from metadata.yaml"
+else
+    # Fall back to project-wide dependencies from settings.yaml
+    DEPENDENCY_LOCATIONS=($(yq eval-all 'explode(.) | .dependencies[].location' "$SETTINGS_FILE"))
+    DEPENDENCY_PATHS=($(yq eval-all 'explode(.) | .dependencies[].path' "$SETTINGS_FILE"))
+    echo "Using project-wide dependencies from settings.yaml"
+fi
 DEPENDENCY_COUNT=${#DEPENDENCY_LOCATIONS[@]}
 
 DEPENCIES_MATCH=true
