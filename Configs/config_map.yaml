@@ -60,6 +60,8 @@ Diffusion:
     t3dmix_S: "Diffusion/t3dmix_S_EHDA.F"
   EHDB:
     t3dmix_S: "Diffusion/t3dmix_S_EHDB.F"
+
+Biology: "bio_NChlPZD.F"
     
 
 FileDestinations:
@@ -71,3 +73,4 @@ FileDestinations:
   Param: "dependencies/param.h"
   Cppdefs: "dependencies/cppdefs.h"
   Diffusion: "dependencies/t3dmix_S.F"
+  Biology: "dependencies/bio_NChlPZD.F"

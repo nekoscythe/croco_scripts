@@ -6,6 +6,31 @@ CONFIG_DIR="$SCRIPT_DIR/Configs"
 BASE_FILES_DIR="$SCRIPT_DIR/base_files"
 CONFIG_FILE="$CONFIG_DIR/config_map.yaml"
 
+get_root_dir() {
+    local dir="$(pwd)"
+    while [[ ! -f "$dir/settings.yaml" && "$dir" != "/" ]]; do
+        dir=$(dirname "$dir")  # Move up one directory level
+    done
+
+    if [[ -f "$dir/settings.yaml" ]]; then
+        echo "$dir"
+    else
+        echo "Error: settings.yaml not found in any parent directory."
+        exit 1
+    fi
+}
+
+get_settings_file() {
+    local root_dir=$(get_root_dir)
+    local settings_file="$root_dir/settings.yaml"
+    if [[ ! -f "$settings_file" ]]; then
+        echo "Error: settings.yaml not found at $settings_file."
+        exit 1
+    fi
+    echo "$settings_file"
+}
+
+
 # Function to check if metadata.yaml exists and extract test details
 check_metadata() {
   if [[ -f metadata.yaml ]]; then
@@ -70,6 +95,7 @@ copy_files() {
   local initial_condition="$2"
   local test_dir_local="$3"
 
+
   local RESOLUTION=$(yq e ".Config.Resolution" metadata.yaml)
 
   echo "Evaluation of RESOLUTION: $RESOLUTION"
@@ -85,11 +111,14 @@ copy_files() {
   local forcing_src=$(yq e ".Resolutions.\"$RESOLUTION\".input_frc" "$CONFIG_FILE" 2>/dev/null)
   local cppdefs_src=$(yq e ".Resolutions.\"$RESOLUTION\".cppdefs_$bio_physics" "$CONFIG_FILE" 2>/dev/null)
   local param_src=$(yq e ".Resolutions.\"$RESOLUTION\".param" "$CONFIG_FILE" 2>/dev/null)
+  local biology_src=$(yq e ".Biology" "$CONFIG_FILE" 2>/dev/null)
+
   
   local restart_src=$(yq e ".InitialConditions.\"$initial_condition\".input_rst_$RESOLUTION" "$CONFIG_FILE" 2>/dev/null)
   local infile_src=$(yq e ".InitialConditions.\"$initial_condition\".infile_$RESOLUTION" "$CONFIG_FILE" 2>/dev/null)
 
   local description_src=$(yq e ".InitialConditions.\"$initial_condition\".Description" "$CONFIG_FILE" 2>/dev/null)
+
 
   
   # Create symbolic links or copy files
@@ -98,6 +127,8 @@ copy_files() {
   [[ -n "$restart_src" ]] && ln -sf "$CONFIG_DIR/$restart_src" "$test_dir_local/${file_dests["Restart"]}"
   [[ -n "$cppdefs_src" ]] && cp "$CONFIG_DIR/$cppdefs_src" "$test_dir_local/${file_dests["Cppdefs"]}"
   [[ -n "$param_src" ]] && cp "$CONFIG_DIR/$param_src" "$test_dir_local/${file_dests["Param"]}"
+  [[ -n "$biology_src" ]] && cp "$CONFIG_DIR/$biology_src" "$test_dir_local/${file_dests["Biology"]}"
+
 
   [[ -n "$description_src" ]] && cp "$CONFIG_DIR/$description_src" "$test_dir_local/${file_dests["ConfigDescription"]}"
   [[ -n "$infile_src" ]] && cp "$CONFIG_DIR/$infile_src" "$test_dir_local/${file_dests["Infile"]}"
@@ -132,12 +163,29 @@ update_diffusion_metadata() {
 # Function to edit metadata.yaml to include the configuration details
 update_metadata() {
   local metadata_file="metadata.yaml"
+  local settings_file="$(get_settings_file)"
 
+  # Get the dependencies section with anchors resolved
+  if yq eval '.dependencies' "$settings_file" > /dev/null 2>&1; then
+    # Create a temporary file with just the resolved dependencies
+    yq eval 'explode(.) | .dependencies' "$settings_file" > temp_deps.yaml
+    
+    # Update metadata.yaml with the resolved dependencies
+    yq eval ".dependencies = load(\"temp_deps.yaml\")" -i "$metadata_file"
+    
+    # Clean up the temporary file
+    rm temp_deps.yaml
+    
+    echo "Dependencies section copied from settings.yaml to metadata.yaml with anchors resolved"
+  else
+    echo "No dependencies found in settings.yaml"
+  fi
+
+  # Add configuration details
   yq e ".Config.ModelType = \"$SELECTED_BIO_PHYSICS\"" -i "$metadata_file"
   yq e ".Config.InitialCondition = \"$SELECTED_INITIAL_CONDITION\"" -i "$metadata_file"
 
   echo -e "\n\033[1;32mMetadata updated with configuration details.\033[0m"
-
 }
 
 
@@ -145,7 +193,7 @@ update_metadata() {
 setup_configuration() {
   check_metadata
   prompt_config
-  copy_files "$SELECTED_BIO_PHYSICS" "$SELECTED_INITIAL_CONDITION"
+  copy_files "$SELECTED_BIO_PHYSICS" "$SELECTED_INITIAL_CONDITION" "$TEST_DIR"
   update_metadata
 }
 
