@@ -278,6 +278,7 @@ case $PARALLEL_MODE in
         fi
         echo "#SBATCH --ntasks=$NUM_CORES" >> "$JOB_SCRIPT"
         echo "#SBATCH --nodes=$NUM_NODES" >> "$JOB_SCRIPT"
+        echo "#SBATCH --ntasks-per-node=128" >> "$JOB_SCRIPT"
         echo "#SBATCH --time=$NUM_HOURS:00:00" >> "$JOB_SCRIPT"
         echo "#SBATCH --output=$ARCHIVE_DIR/slurm-%j.out" >> "$JOB_SCRIPT"
         echo "#SBATCH --error=$ARCHIVE_DIR/slurm-%j.err" >> "$JOB_SCRIPT"
