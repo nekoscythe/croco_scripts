@@ -273,7 +273,7 @@ case $PARALLEL_MODE in
         #create the job script
         JOB_SCRIPT="$ARCHIVE_DIR/job_$TEST_ID.job"
         echo "#!/bin/bash" > "$JOB_SCRIPT"
-        if [ "$PREEMPT" = true ] ; then
+        if [ "$PREEMPT" = "true" ] ; then
         echo "#SBATCH -p preempt" >> "$JOB_SCRIPT"
         fi
         echo "#SBATCH --ntasks=$NUM_CORES" >> "$JOB_SCRIPT"
