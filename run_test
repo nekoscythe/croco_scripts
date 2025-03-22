@@ -293,6 +293,7 @@ case $PARALLEL_MODE in
         echo "#Run command" >> "$JOB_SCRIPT"
         echo "srun $BINARY_PATH $REL_INPUT_FILE | tee -a outputs/run_test.log" >> "$JOB_SCRIPT"
         #submit the job
+        export OMPI_MCA_rmaps_base_oversubscribe=1
         sbatch "$JOB_SCRIPT"
 
         ;;
