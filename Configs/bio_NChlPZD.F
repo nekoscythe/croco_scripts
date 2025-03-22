@@ -56,7 +56,7 @@
                            !                       [mMol C (mMol N)-1]
      &  theta_m= 0.0535,    ! max Cellular Chlorophyll to Carbon Ratio
                            ! range:(0.015<==>0.072);    [mg Chla/mg C]
-     &  K_NO3   = 1./3,  ! inverse half-saturation for Phytoplankton
+     &  K_NO3   = 1./10,  ! inverse half-saturation for Phytoplankton
                            ! range:(1./.0 <==> 1./.9);[1/(mmol-N m-3)]
      &  mu_P_D  = 0.03)   ! Phyto mortality to Det rate        [d-1]) 
 !
