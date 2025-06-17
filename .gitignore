@@ -5,7 +5,5 @@
 *.png*
 !preprocess.py
 !preprocess_all.py
-/db
 /Configs
-
-
+.codebuddy/db
