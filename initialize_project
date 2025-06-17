@@ -211,7 +211,6 @@ dependencies:
 # Scripts
 scripts:
   compile: "./jobcomp"
-  browse_tests: "./browse_tests.py"
 EOL
 }
 
