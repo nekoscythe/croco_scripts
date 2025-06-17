@@ -24,7 +24,7 @@ history: LDEFHIS, NWRT, NRPFHIS / filename
             T      576     0
     outputs/output_his.nc
 averages: NTSAVG, NAVG, NRPFAVG / filename
-            1      28800     0
+            1      288000     0
     outputs/output_avg.nc
 
 primary_history_fields: zeta UBAR VBAR  U  V   wrtT(1:NT)

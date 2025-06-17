@@ -60,6 +60,22 @@ InitialConditions:
     infile_medres: "InitialConditions/Config5/infile_medres.in"
     infile_lowres: "InitialConditions/Config5/infile_lowres.in"
     Description: "InitialConditions/Config5/Description.txt"
+  Config6:
+    input_rst_hires: "InitialConditions/Config6/input_rst_hires.nc"
+    input_rst_medres: "InitialConditions/Config6/input_rst_medres.nc"
+    input_rst_lowres: "InitialConditions/Config6/input_rst_lowres.nc"
+    infile_hires: "InitialConditions/Config6/infile_hires.in"
+    infile_medres: "InitialConditions/Config6/infile_medres.in"
+    infile_lowres: "InitialConditions/Config6/infile_lowres.in"
+    Description: "InitialConditions/Config6/Description.txt"
+  Config7:
+    input_rst_hires: "InitialConditions/Config7/input_rst_hires.nc"
+    input_rst_medres: "InitialConditions/Config7/input_rst_medres.nc"
+    input_rst_lowres: "InitialConditions/Config7/input_rst_lowres.nc"
+    infile_hires: "InitialConditions/Config7/infile_hires.in"
+    infile_medres: "InitialConditions/Config7/infile_medres.in"
+    infile_lowres: "InitialConditions/Config7/infile_lowres.in"
+    Description: "InitialConditions/Config7/Description.txt"
 
 Diffusion:
   Control:
