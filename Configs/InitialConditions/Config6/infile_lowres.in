@@ -2,7 +2,7 @@ title:
         (To Be Modified by script, should be the same as test title and test number)
 
 time_stepping: NTIMES   dt[sec]  NDTFAST  NINFO
-              51840      150      60      1
+              3240      2400      60      1
 
 
 S-coord: THETA_S,   THETA_B,    Hc (m)
@@ -17,14 +17,14 @@ initial: NRREC / filename
     inputs/input_rst.nc
 
 restart:          NRST, NRPFRST / filename
-                   57600    0
+                   3600    0
     outputs/output_rst.nc
     
 history: LDEFHIS, NWRT, NRPFHIS / filename 
-            T      576     0
+            T      36     0
     outputs/output_his.nc
 averages: NTSAVG, NAVG, NRPFAVG / filename
-            1      28800     0
+            1      1800     0
     outputs/output_avg.nc
 
 primary_history_fields: zeta UBAR VBAR  U  V   wrtT(1:NT)
