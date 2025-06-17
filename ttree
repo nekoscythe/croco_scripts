@@ -16,7 +16,6 @@ find_root_dir() {
 }
 
 # Function to recursively build the test tree with color-coded statuses
-# Function to recursively build the test tree with color-coded statuses
 build_test_tree() {
     local DIR="$1"
     local PREFIX="$2"
@@ -37,35 +36,33 @@ build_test_tree() {
     local STATUS_COLOR=""
     local STATUS=""
 
-    
-
     if [[ ! -f "$LOG_FILE" ]]; then
-    STATUS_COLOR="\e[33m"  # Yellow (Not Run)
-    STATUS="[Not Run]"
-else
-    local LAST_LINE=$(tail -n 1 "$LOG_FILE")
-    if grep -q "Error" "$LOG_FILE"; then  # Check for errors first
-        STATUS_COLOR="\e[31m"  # Red (Failed)
-        STATUS="[Failed]"
-    elif grep -q "started time-stepping" "$LOG_FILE"; then  # Check if started
-        if grep -q "MAIN: DONE" "$LOG_FILE"; then  # Check if completed
-        # check if preprocessed file exists
-            if [[ -f "$PREPROCESSED_FILE" ]]; then
-                STATUS_COLOR="\e[92m"  # Bright Green (Passed and Preprocessed)
-                STATUS="[Passed and Preprocessed]"
-            else
-                STATUS_COLOR="\e[32m"  # Green (Passed)
-                STATUS="[Passed]"
+        STATUS_COLOR="\e[33m"  # Yellow (Not Run)
+        STATUS="[Not Run]"
+    else
+        local LAST_LINE=$(tail -n 1 "$LOG_FILE")
+        if grep -q "Error" "$LOG_FILE"; then  # Check for errors first
+            STATUS_COLOR="\e[31m"  # Red (Failed)
+            STATUS="[Failed]"
+        elif grep -q "started time-stepping" "$LOG_FILE"; then  # Check if started
+            if grep -q "MAIN: DONE" "$LOG_FILE"; then  # Check if completed
+            # check if preprocessed file exists
+                if [[ -f "$PREPROCESSED_FILE" ]]; then
+                    STATUS_COLOR="\e[92m"  # Bright Green (Passed and Preprocessed)
+                    STATUS="[Passed and Preprocessed]"
+                else
+                    STATUS_COLOR="\e[32m"  # Green (Passed)
+                    STATUS="[Passed]"
+                fi
+            else  # Started but not finished
+                STATUS_COLOR="\e[35m"  # Magenta (Running)
+                STATUS="[Running]"
             fi
-        else  # Started but not finished
-            STATUS_COLOR="\e[35m"  # Magenta (Running)
-            STATUS="[Running]"
+        else # Log file exists, but doesn't have "started time-stepping"
+            STATUS_COLOR="\e[36m" # Cyan (Unknown/Incomplete)
+            STATUS="[Incomplete/Unknown]"
         fi
-    else # Log file exists, but doesn't have "started time-stepping"
-        STATUS_COLOR="\e[36m" # Cyan (Unknown/Incomplete)
-        STATUS="[Incomplete/Unknown]"
     fi
-fi
 
     # Print test entry with color
     if [[ "$IS_LAST" == "true" ]]; then
@@ -91,7 +88,10 @@ fi
             fi
         done
 
-        IFS=$'\n' sorted_subtests=($(for subtest in "${SUBTESTS_WITH_METADATA[@]}"; do echo "$subtest"; done | sort -t '|' -k3))
+        # Sort by test ID numerically
+        IFS=$'\n' sorted_subtests=($(for subtest in "${SUBTESTS_WITH_METADATA[@]}"; do 
+            echo "$subtest"; 
+        done | sort -t '|' -k3 -n))
         unset IFS
 
         local COUNT=${#sorted_subtests[@]}
@@ -108,12 +108,130 @@ fi
         done
     fi
 }
+extract_number_prefix() {
+    local input="$1"
+    if [[ "$input" =~ ^([0-9]+) ]]; then
+        echo "${BASH_REMATCH[1]}"
+    else
+        echo ""
+    fi
+}
 
+# Function to find a specific test directory by test ID
+find_test_by_id() {
+    local ROOT_DIR="$1"
+    local TARGET_ID="$2"
+    
+    # Input validation
+    if [[ -z "$ROOT_DIR" || -z "$TARGET_ID" ]]; then
+        echo "Error: ROOT_DIR and TARGET_ID are required" >&2
+        return 1
+    fi
+    
+    # Check if yq is available
+    if ! command -v yq >/dev/null 2>&1; then
+        echo "Error: yq command not found" >&2
+        return 1
+    fi
+    
+    # Start from Tests directory
+    local TESTS_DIR="$ROOT_DIR/Tests"
+    
+    if [[ ! -d "$TESTS_DIR" ]]; then
+        echo "Error: Tests directory not found at $TESTS_DIR." >&2
+        return 1
+    fi
+    
+    # Search function that checks a directory and its subtests recursively
+    search_directory() {
+        local DIR="$1"
+        
+        # Check if this directory has metadata.yaml
+        local METADATA_FILE="$DIR/metadata.yaml"
+        if [[ -f "$METADATA_FILE" ]]; then
+            local TEST_ID=$(yq eval '.test_id' "$METADATA_FILE" 2>/dev/null)
+            if [[ $? -ne 0 || -z "$TEST_ID" || "$TEST_ID" == "null" ]]; then
+                printf "Warning: Could not read test_id from $METADATA_FILE\n" >&2
+            else
+                # Direct string comparison for alphanumeric IDs
+                if [[ "$TEST_ID" == "$TARGET_ID" ]]; then
+                    echo "$DIR"
+                    return 0
+                fi
+            fi
+        fi
+        
+        # Search in subtests directory if it exists
+        local SUBTESTS_DIR="$DIR/subtests"
+        if [[ -d "$SUBTESTS_DIR" ]]; then
+            # Enable nullglob to handle case where no subdirectories exist
+            local old_nullglob=$(shopt -p nullglob)
+            shopt -s nullglob
+            
+            for SUBTEST_DIR in "$SUBTESTS_DIR"/*/; do
+                if [[ -d "$SUBTEST_DIR" ]]; then
+                    # Fix: Call function directly in if condition
+                    if search_directory "$SUBTEST_DIR"; then
+                        # Restore nullglob setting
+                        $old_nullglob
+                        return 0
+                    fi
+                fi
+            done
+            
+            # Restore nullglob setting
+            $old_nullglob
+        fi
+        
+        return 1
+    }
+    
+    # Enable nullglob for the main search loop
+    local old_nullglob=$(shopt -p nullglob)
+    shopt -s nullglob
+    
+    # Search through all directories that start with "Test" in the Tests folder
+    for TEST_DIR in "$TESTS_DIR"/Test*/; do
+        if [[ -d "$TEST_DIR" ]]; then
+            # Fix: Call function directly in if condition
+            if search_directory "$TEST_DIR"; then
+                # Restore nullglob setting
+                $old_nullglob
+                return 0
+            fi
+        fi
+    done
+    
+    # Restore nullglob setting
+    $old_nullglob
+    
+    printf "Test with ID '$TARGET_ID' not found\n" >&2
+    return 1
+}
 
 
 # Function to display the test tree
 show_test_tree() {
     local ROOT_DIR="$1"
+    local TARGET_TEST_ID="$2"
+    
+    # If a specific test ID is provided, show only that subtree
+    if [[ -n "$TARGET_TEST_ID" ]]; then
+        local TEST_DIR=$(find_test_by_id "$ROOT_DIR" "$TARGET_TEST_ID")
+        if [[ $? -eq 0 && -n "$TEST_DIR" ]]; then
+            echo ""
+            echo "Test Subtree for Test ID $TARGET_TEST_ID:"
+            echo "----------------------------------------"
+            build_test_tree "$TEST_DIR" "" "true"
+        else
+            echo "Error: Test with ID '$TARGET_TEST_ID' not found."
+            exit 1
+        fi
+        echo ""
+        return
+    fi
+
+    # Show all tests
     local TESTS_DIR="$ROOT_DIR/Tests"
 
     if [[ ! -d "$TESTS_DIR" ]]; then
@@ -125,8 +243,8 @@ show_test_tree() {
     echo "Test Tree:"
     echo "----------"
 
-    # Iterate through all tests in the Tests directory
-    local TESTS=("$TESTS_DIR"/*)
+    # Iterate through all directories that start with "Test" in the Tests directory
+    local TESTS=("$TESTS_DIR"/Test*)
     local TESTS_WITH_METADATA=()
 
     # Collect all tests and their metadata
@@ -141,8 +259,10 @@ show_test_tree() {
         fi
     done
 
-    # Sort the tests by test ID
-    IFS=$'\n' sorted_tests=($(for test in "${TESTS_WITH_METADATA[@]}"; do echo "$test"; done | sort -t '|' -k3))
+    # Sort the tests by test ID numerically
+    IFS=$'\n' sorted_tests=($(for test in "${TESTS_WITH_METADATA[@]}"; do 
+        echo "$test"; 
+    done | sort -t '|' -k3 -n))
     unset IFS
 
     # Iterate over sorted tests and display them
@@ -159,9 +279,26 @@ show_test_tree() {
         fi
     done
 
-echo ""
+    echo ""
+}
+
+# Function to show usage
+show_usage() {
+    echo "Usage: ttree [test_id]"
+    echo "  test_id: Optional. Show only the subtree for the specified test ID"
+    echo "  If no test_id is provided, shows all tests"
+    echo ""
+    echo "Examples:"
+    echo "  ttree        # Show all tests"
+    echo "  ttree 5      # Show only test 5 and its subtests"
+    echo "  ttree 12a     # Show only test 12a and its subtests"
 }
 
 # Main script execution
+if [[ "$1" == "-h" || "$1" == "--help" ]]; then
+    show_usage
+    exit 0
+fi
+
 ROOT_DIR=$(find_root_dir)  # Find the root directory
-show_test_tree "$ROOT_DIR"  # Display the test tree
+show_test_tree "$ROOT_DIR" "$1"  # Display the test tree (optionally filtered by test ID)
